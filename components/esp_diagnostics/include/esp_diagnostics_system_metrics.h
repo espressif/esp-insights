@@ -1,0 +1,75 @@
+// Copyright 2021 Espressif Systems (Shanghai) PTE LTD
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#pragma once
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#if CONFIG_DIAG_ENABLE_HEAP_METRICS
+
+/**
+ * @brief Initialize the heap metrics
+ *
+ * Collects free heap size, largest free block and minimum free size metrics values are
+ * at 30 second interval. Values are reported to cloud only if it drops below low watermark.
+ *
+ * Parameters are collected for RAM in internal memory and external memory (if device has PSRAM).
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_heap_metrics_init(void);
+
+/**
+ * @brief Reset the periodic interval
+ *
+ * @param[in] period Period interval in seconds
+ */
+void esp_diag_heap_metrics_reset_period(uint32_t period);
+
+/**
+ * @brief Dumps the heap metrics and prints them to the console.
+ *
+ * This API collects and reports metrics value at any give point in time.
+ */
+void esp_diag_heap_metrics_dump(void);
+
+#endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
+
+#if CONFIG_DIAG_ENABLE_WIFI_METRICS
+
+/**
+ * @brief Initialize the wifi metrics
+ *
+ * Wi-Fi metrics collects the wifi RSSI value.
+ * Reporting RSSI based on threshold value is supported from esp-idf release v4.3.
+ * If rssi drops below certain threshold it starts reporting RSSI whenever RSSI drops to new low value.
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_wifi_metrics_init(void);
+
+/**
+ * @brief Dumps the wifi metrics and prints them to the console.
+ *
+ * This API can be used to collect wifi metrics at any given point in time.
+ */
+void esp_diag_wifi_metrics_dump(void);
+
+#endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
+
+#ifdef __cplusplus
+}
+#endif
