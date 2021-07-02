@@ -1,0 +1,12 @@
+menu "ESP Insights"
+
+    config ESP_INSIGHTS_ENABLED
+        bool "Enable ESP Insights"
+        default n
+
+    config ESP_INSIGHTS_DEBUG_ENABLED
+        depends on ESP_INSIGHTS_ENABLED
+        bool "Enable Insights debug prints"
+        default n
+
+endmenu

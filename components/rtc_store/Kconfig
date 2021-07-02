@@ -1,0 +1,16 @@
+menu "RTC Store"
+
+    config RTC_STORE_DATA_SIZE
+        int
+        default 3072
+
+    config RTC_STORE_CRITICAL_DATA_SIZE
+        int "Size of critical data store"
+        range 512 2560
+        default 2048
+        help
+            RTC data store is allocated in RTC slow memory and with total size of 3KB.
+            RTC data store is divided into two parts, critical and non-critical.
+            This option configures the size of critical data buffer and remaining is used for
+            non critical data buffer.
+endmenu

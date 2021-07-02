@@ -1,0 +1,28 @@
+menu "Example Configuration"
+
+    config ESP_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name) for the example to connect to.
+
+    config ESP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for the example to use.
+
+    config CLOUD_REPORTING_PERIOD_HR
+        int "Cloud reporting period in hours"
+        range 1 24
+        default 1
+        help
+            Time interval in hours to periodically read data from insights agent and if available send it to cloud
+
+    config DIAG_ENABLE_LOG_TYPE_ALL
+        bool "Enable all diagnostics log type"
+        default y
+        help
+            By default this example enables error/warning/event diagnostics log types,
+            this config option quickly disables the capture of all diagnostics log types.
+endmenu
