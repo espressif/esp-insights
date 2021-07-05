@@ -5,6 +5,7 @@
 - This example demonstrates the use of ESP Insights framework in minimal way
 - Device will try to connect with the configured WiFi network
 - ESP Insights is enabled in this example, so any error/warning logs, crashes will be reported to cloud
+- This example collects heap and wifi metrics every 10 minutes and network variables are collected when they change
 
 ## Prerequisites
 - In order to report crashes, [Save core dump to flash](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/core_dump.html#save-core-dump-to-flash) config option must be enabled.
@@ -50,7 +51,6 @@ As you can see in the example's `app_main.c` file, only a single API call is req
 	...
 	esp_insights_config_t config = {
 		.log_type = ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT,
-		.cloud_reporting_period = 3600,
 	};
 	esp_insights_init(&config);
 	...

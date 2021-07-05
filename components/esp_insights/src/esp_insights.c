@@ -37,6 +37,8 @@
 #define INSIGHTS_DEBUG_ENABLED      CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
 #define APP_ELF_SHA256_LEN          (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
 
+#define CLOUD_REPORTING_PERIOD_IN_SEC    (5 * 60)  /* 5 minutes */
+
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 
 typedef struct esp_insights_entry {
@@ -337,6 +339,7 @@ static void insights_periodic_handler(void *priv_data)
     }
 #endif /* SEND_INSIGHTS_META */
     send_insights_data();
+    ESP_LOGI(TAG, "Next cloud reporting is scheduled after %d seconds", CLOUD_REPORTING_PERIOD_IN_SEC);
 }
 
 static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
@@ -381,7 +384,7 @@ static void esp_insights_deinit(void)
 
 static esp_err_t esp_insights_enable(esp_insights_config_t *config)
 {
-    if (!config || !config->cloud_reporting_period) {
+    if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
     s_insights_data.mqtt_lock = xSemaphoreCreateMutex();
@@ -471,7 +474,7 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
 #endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-    err = esp_insights_register_periodic_handler(insights_periodic_handler, config->cloud_reporting_period, NULL);
+    err = esp_insights_register_periodic_handler(insights_periodic_handler, CLOUD_REPORTING_PERIOD_IN_SEC, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register insights_periodic_handler.");
         goto enable_err;
