@@ -24,11 +24,9 @@
     Default values:
         CONFIG_ESP_WIFI_SSID               : "myssid"
         CONFIG_ESP_WIFI_PASSWORD           : "mypassword"
-        CONFIG_CLOUD_REPORTING_PERIOD_HR   : one hour
 */
 #define EXAMPLE_ESP_WIFI_SSID               CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS               CONFIG_ESP_WIFI_PASSWORD
-#define EXAMPLE_CLOUD_REPORTING_PERIOD      (CONFIG_CLOUD_REPORTING_PERIOD_HR * 3600)
 
 #if CONFIG_DIAG_ENABLE_LOG_TYPE_ALL
 #define EXAMPLE_DIAG_LOG_TYPE               ESP_DIAG_LOG_TYPE_ERROR \
@@ -91,7 +89,6 @@ void app_main(void)
 
     esp_insights_config_t config = {
         .log_type = EXAMPLE_DIAG_LOG_TYPE,
-        .cloud_reporting_period = EXAMPLE_CLOUD_REPORTING_PERIOD,
     };
     ret = esp_insights_init(&config);
     if (ret != ESP_OK) {

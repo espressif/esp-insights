@@ -14,6 +14,9 @@
 #include "esp_rmaker_utils.h"
 #include "app_wifi.h"
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/timers.h>
+
 /* The examples uses configuration that you can set via project configuration menu
 
     If you'd rather not, just change the below entries to strings with
@@ -22,11 +25,9 @@
     Default values:
         CONFIG_ESP_WIFI_SSID               : "myssid"
         CONFIG_ESP_WIFI_PASSWORD           : "mypassword"
-        CONFIG_CLOUD_REPORTING_PERIOD_HR   : one hour
 */
 #define EXAMPLE_ESP_WIFI_SSID               CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS               CONFIG_ESP_WIFI_PASSWORD
-#define EXAMPLE_CLOUD_REPORTING_PERIOD      (CONFIG_CLOUD_REPORTING_PERIOD_HR * 3600)
 
 #if CONFIG_DIAG_ENABLE_LOG_TYPE_ALL
 #define EXAMPLE_DIAG_LOG_TYPE               ESP_DIAG_LOG_TYPE_ERROR \
@@ -35,6 +36,8 @@
 #else
 #define EXAMPLE_DIAG_LOG_TYPE               0
 #endif /* CONFIG_DIAG_ENABLE_LOG_TYPE_ALL */
+
+#define METRICS_DUMP_INTERVAL_TICKS         ((600 * 1000) / portTICK_RATE_MS)
 
 static const char *TAG = "minimal_diag";
 
@@ -62,7 +65,6 @@ void app_main(void)
 
     esp_insights_config_t config = {
         .log_type = EXAMPLE_DIAG_LOG_TYPE,
-        .cloud_reporting_period = EXAMPLE_CLOUD_REPORTING_PERIOD,
     };
     ret = esp_insights_init(&config);
     if (ret != ESP_OK) {
@@ -77,8 +79,17 @@ void app_main(void)
         ESP_LOGE(TAG, "Test error: API nvs_open() failed, error:0x%x", ret);
     }
 
+#if CONFIG_DIAG_ENABLE_METRICS
+    while (true) {
 #if CONFIG_DIAG_ENABLE_HEAP_METRICS
-    /* Dump heap metrics */
-    esp_diag_heap_metrics_dump();
+        esp_diag_heap_metrics_dump();
 #endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
+
+#if CONFIG_DIAG_ENABLE_WIFI_METRICS
+        esp_diag_wifi_metrics_dump();
+#endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
+
+        vTaskDelay(METRICS_DUMP_INTERVAL_TICKS);
+    }
+#endif /* CONFIG_DIAG_ENABLE_METRICS */
 }

@@ -36,8 +36,8 @@
 #define PATH_HEAP_EXTERNAL "heap.external"
 
 #define POLLING_INTERVAL        30           /* 30 seconds */
-#define REPORTING_INTERVAL      (60 * 60)    /* 3600 seconds = 1 hour */
-#define ITERATIONS_TO_REPORT    (REPORTING_INTERVAL / POLLING_INTERVAL)
+#define TIME_WINDOW             (30 * 60)    /* 1800 seconds = 30 minutes */
+#define ITERATIONS_TO_REPORT    (TIME_WINDOW / POLLING_INTERVAL)
 
 #define SEC2TICKS(s)       ((s * 1000) / portTICK_RATE_MS)
 

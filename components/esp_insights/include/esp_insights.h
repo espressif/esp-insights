@@ -28,8 +28,6 @@ extern "C"
  */
 typedef struct {
     uint32_t log_type;               /*!< Log types to enable, bitwise OR the values from esp_diag_log_type_t */
-    uint32_t cloud_reporting_period; /*!< Time interval in seconds to periodically read data from diagnostics
-                                          module and if available send to cloud */
 } esp_insights_config_t;
 
 /**

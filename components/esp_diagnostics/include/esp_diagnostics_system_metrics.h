@@ -23,8 +23,9 @@ extern "C"
 /**
  * @brief Initialize the heap metrics
  *
- * Collects free heap size, largest free block and minimum free size metrics values are
- * at 30 second interval. Values are reported to cloud only if it drops below low watermark.
+ * This API starts polling free memory, largest free block every 30 seconds and collects minimum and maximum values
+ * in 30 minutes time interval. It also starts polling minimum free memory and if that value drops
+ * to a new low (low watermark) only then it is collected.
  *
  * Parameters are collected for RAM in internal memory and external memory (if device has PSRAM).
  *

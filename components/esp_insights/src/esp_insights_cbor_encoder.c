@@ -23,6 +23,8 @@
 #include <esp_diagnostics_metrics.h>
 #include <esp_diagnostics_variables.h>
 #include <soc/soc_memory_layout.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map;
 static CborEncoder s_meta_encoder, s_meta_result_map, s_diag_meta_map, s_diag_meta_data_map;
@@ -157,8 +159,13 @@ void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info
     CborEncoder boot_map;
     cbor_encode_text_stringz(&s_diag_data_map, "boot");
     cbor_encoder_create_map(&s_diag_data_map, &boot_map, CborIndefiniteLength);
+
+    /* xTaskGetTickCount() API returns count of ticks since start of scheduler
+     * For boot timestamp, we subtract the ticks since boot to get closest timestamp to bootup
+     */
     cbor_encode_text_stringz(&boot_map, "ts");
-    cbor_encode_uint(&boot_map, esp_diag_timestamp_get() - esp_timer_get_time());
+    cbor_encode_uint(&boot_map, esp_diag_timestamp_get() - (uint64_t)(pdTICKS_TO_MS(xTaskGetTickCount()) * 1000));
+
     cbor_encode_text_stringz(&boot_map, "chip");
     cbor_encode_uint(&boot_map, device_info->chip_model);
     cbor_encode_text_stringz(&boot_map, "chip_rev");
