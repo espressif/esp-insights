@@ -37,13 +37,17 @@
 #define INSIGHTS_DEBUG_ENABLED      CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
 #define APP_ELF_SHA256_LEN          (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
 
-#define CLOUD_REPORTING_PERIOD_IN_SEC    (5 * 60)  /* 5 minutes */
+#define CLOUD_REPORTING_PERIOD_MIN_SEC    (1 * 60)  /* 1 minute */
+#define CLOUD_REPORTING_PERIOD_MAX_SEC    (60 * 60)  /* 60 minutes */
 
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 
 typedef struct esp_insights_entry {
     esp_rmaker_work_fn_t work_fn;
     TimerHandle_t timer;
+    uint32_t min_seconds;
+    uint32_t max_seconds;
+    uint32_t cur_seconds;
     void *priv_data;
 } esp_insights_entry_t;
 
@@ -55,6 +59,7 @@ typedef struct {
     char app_sha256[APP_ELF_SHA256_LEN];
     esp_rmaker_mqtt_conn_params_t *mqtt_conn_params;
     char *node_id;
+    bool data_sent;
 #if SEND_INSIGHTS_META
     bool meta_msg_pending;
     uint32_t meta_msg_id;
@@ -74,6 +79,7 @@ static void esp_insights_first_call(void *priv_data)
     esp_insights_entry_t *entry = (esp_insights_entry_t *)priv_data;
     esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
     /* Start timer here so that the function is called periodically */
+    ESP_LOGI(TAG, "Scheduling Insights timer for %d seconds.", entry->cur_seconds);
     xTimerStart(entry->timer, 0);
 }
 
@@ -96,20 +102,52 @@ static esp_err_t esp_insights_send_data(void *data, size_t len, int *msg_id)
     return err;
 }
 
-/* This executes in the context of timer task */
+/* This executes in the context of timer task.
+ *
+ * There is a dynamic logic to decide the next instance when the insights
+ * data will be reported. Depending on whether data was sent or not during
+ * the previous timeout, we double or halve the time period.
+ * This ensures that data generally gets reported quick enough,
+ * but if there's very frequent data being generated, it wont result
+ * into too frquent publishes.
+ * The period will keep changing between CLOUD_REPORTING_PERIOD_MIN_SEC and
+ * CLOUD_REPORTING_PERIOD_MAX_SEC
+ */
 static void esp_insights_common_cb(TimerHandle_t handle)
 {
     esp_insights_entry_t *entry = (esp_insights_entry_t *)pvTimerGetTimerID(handle);
+    /* Check if any data was sent during the previous time out */
+    xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
+    bool l_data_sent = s_insights_data.data_sent;
+    s_insights_data.data_sent = false;
+    xSemaphoreGive(s_insights_data.mqtt_lock);
+
     if (entry) {
         esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
+        /* If data was sent during previous timer interval, double the period */
+        if (l_data_sent) {
+            entry->cur_seconds <<= 1; /* Double the period */
+            if (entry->cur_seconds > entry->max_seconds) {
+                entry->cur_seconds = entry->max_seconds;
+            }
+        } else {
+            /* If no data was sent during previous timer interval, halve the period */
+            entry->cur_seconds >>= 1; /* Halve the period */
+            if (entry->cur_seconds < entry->min_seconds) {
+                entry->cur_seconds = entry->min_seconds;
+            }
+        }
+        xTimerChangePeriod(handle, (entry->cur_seconds * 1000)/ portTICK_PERIOD_MS, 100);
+        ESP_LOGI(TAG, "Scheduling Insights timer for %d seconds.", entry->cur_seconds);
+        xTimerStart(handle, 0);
     }
 }
 
 static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t work_fn,
-                                                        uint32_t period_seconds,
+                                                        uint32_t min_seconds, uint32_t max_seconds,
                                                         void *priv_data)
 {
-    if (!work_fn || (period_seconds == 0)) {
+    if (!work_fn || (min_seconds == 0) || (max_seconds == 0)) {
         return ESP_FAIL;
     }
 
@@ -119,7 +157,10 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
     }
     insights_entry->work_fn = work_fn;
     insights_entry->priv_data = priv_data;
-    insights_entry->timer = xTimerCreate("test", (period_seconds * 1000)/ portTICK_PERIOD_MS, pdTRUE, (void *)insights_entry, esp_insights_common_cb);
+    insights_entry->min_seconds = min_seconds;
+    insights_entry->max_seconds = max_seconds;
+    insights_entry->cur_seconds = min_seconds;
+    insights_entry->timer = xTimerCreate("test", (insights_entry->cur_seconds * 1000)/ portTICK_PERIOD_MS, pdFALSE, (void *)insights_entry, esp_insights_common_cb);
     if (!insights_entry->timer) {
         free(insights_entry);
         return ESP_FAIL;
@@ -161,10 +202,12 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                 xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
                 if (msg_id == s_insights_data.mqtt_pub_msg_id) {
                     rtc_store_critical_data_release(s_insights_data.mqtt_pub_msg_len);
+                    s_insights_data.data_sent = true;
 #if SEND_INSIGHTS_META
                 } else if (s_insights_data.meta_msg_pending && msg_id == s_insights_data.meta_msg_id) {
                     esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
                     s_insights_data.meta_msg_pending = false;
+                    s_insights_data.data_sent = true;
 #endif /* SEND_INSIGHTS_META */
                 }
                 xSemaphoreGive(s_insights_data.mqtt_lock);
@@ -322,6 +365,7 @@ static void send_insights_data(void)
         } else if (msg_id == 0) {
             /* Published with QOS0, remove the read data from the ringbuffer */
             rtc_store_critical_data_release(critical_data_size);
+            s_insights_data.data_sent = true;
         }
     }
 }
@@ -339,7 +383,6 @@ static void insights_periodic_handler(void *priv_data)
     }
 #endif /* SEND_INSIGHTS_META */
     send_insights_data();
-    ESP_LOGI(TAG, "Next cloud reporting is scheduled after %d seconds", CLOUD_REPORTING_PERIOD_IN_SEC);
 }
 
 static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
@@ -474,7 +517,8 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
 #endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-    err = esp_insights_register_periodic_handler(insights_periodic_handler, CLOUD_REPORTING_PERIOD_IN_SEC, NULL);
+    err = esp_insights_register_periodic_handler(insights_periodic_handler,
+                CLOUD_REPORTING_PERIOD_MIN_SEC, CLOUD_REPORTING_PERIOD_MAX_SEC, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register insights_periodic_handler.");
         goto enable_err;
