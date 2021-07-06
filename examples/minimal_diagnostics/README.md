@@ -58,6 +58,8 @@ As you can see in the example's `app_main.c` file, only a single API call is req
 }
 ```
 
+> Note: By default, the logs will get reported every 5 minutes after the device first connects to the cloud. So, it can take upto 5min for the logs to reflect on the dashboard. Moreover, if a large number of logs are generated within that time, filling up the buffers, any newer logs will be dropped.
+
 ### Configurations
 
 One important functionality of ESP Insights (though optional) is capturing the core dump information into flash memory whenever the firmware crashes, and reporting it to the cloud backend whenever possible in the subsequent boot. This needs setting up some config options. You can find these config options in the sdkconfig.defaults file which you may add in your own example using the below command:

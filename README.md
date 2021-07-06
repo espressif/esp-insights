@@ -30,7 +30,7 @@ All of this information should help the developer understand better how their de
 
 ## Getting Started
 
-> If you have already been using ESP RainMaker, you can directly try [this example from ESP RainMaker](https://github.com/espressif/esp-rainmaker/tree/master/examples/switch_with_insights).
+> If you have already been using ESP RainMaker, you can check out the documentation [here](https://rainmaker.espressif.com/docs/esp-insights.html) and get started with enabling Insights in your ESP RainMaker examples. However, if you have never used RainMaker and just want to get started with Insights, continue with the steps below.
 
 In order to enable diagnostics reporting in your firmware, you need to follow a few basic steps summarised below:
 
