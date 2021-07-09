@@ -41,6 +41,7 @@
 #define CLOUD_REPORTING_PERIOD_MAX_SEC    (60 * 60)  /* 60 minutes */
 
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
+#define KEY_LOG_WR_FAIL    "log_wr_fail"
 
 typedef struct esp_insights_entry {
     esp_rmaker_work_fn_t work_fn;
@@ -64,6 +65,8 @@ typedef struct {
     bool meta_msg_pending;
     uint32_t meta_msg_id;
 #endif /* SEND_INSIGHTS_META */
+    bool data_send_inprogress;
+    uint32_t log_write_fail_cnt; /* Count of failed log write */
 } esp_insights_data_t;
 
 #ifdef CONFIG_ESP_INSIGHTS_ENABLED
@@ -203,6 +206,7 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                 if (msg_id == s_insights_data.mqtt_pub_msg_id) {
                     rtc_store_critical_data_release(s_insights_data.mqtt_pub_msg_len);
                     s_insights_data.data_sent = true;
+                    s_insights_data.data_send_inprogress = false;
 #if SEND_INSIGHTS_META
                 } else if (s_insights_data.meta_msg_pending && msg_id == s_insights_data.meta_msg_id) {
                     esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
@@ -328,6 +332,15 @@ static void send_insights_data(void)
     int msg_id = -1;
 
     memset(s_insights_data.scratch_buf, 0, INSIGHTS_DATA_MAX_SIZE);
+
+#if CONFIG_DIAG_ENABLE_VARIABLES
+    static uint32_t prev_log_write_fail_cnt = 0;
+    if (s_insights_data.log_write_fail_cnt > prev_log_write_fail_cnt) {
+        prev_log_write_fail_cnt = s_insights_data.log_write_fail_cnt;
+        esp_diag_variable_add_uint(KEY_LOG_WR_FAIL, prev_log_write_fail_cnt);
+    }
+#endif /* CONFIG_DIAG_ENABLE_VARIABLES */
+
     critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
     non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
     len = encode_data(critical_data, critical_data_size,
@@ -365,7 +378,10 @@ static void send_insights_data(void)
         } else if (msg_id == 0) {
             /* Published with QOS0, remove the read data from the ringbuffer */
             rtc_store_critical_data_release(critical_data_size);
+            xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
             s_insights_data.data_sent = true;
+            s_insights_data.data_send_inprogress = false;
+            xSemaphoreGive(s_insights_data.mqtt_lock);
         }
     }
 }
@@ -375,6 +391,9 @@ static void insights_periodic_handler(void *priv_data)
     /* Return if wifi is disconnected */
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK) {
+        xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
+        s_insights_data.data_send_inprogress = false;
+        xSemaphoreGive(s_insights_data.mqtt_lock);
         return;
     }
 #if SEND_INSIGHTS_META
@@ -383,6 +402,39 @@ static void insights_periodic_handler(void *priv_data)
     }
 #endif /* SEND_INSIGHTS_META */
     send_insights_data();
+}
+
+static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
+                                    int32_t event_id, void* event_data)
+{
+    if (event_base != RTC_STORE_EVENT) {
+        return;
+    }
+    switch(event_id) {
+        case RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM:
+        {
+            /* If unable to acquire lock then give up and send data next time */
+            if (xSemaphoreTake(s_insights_data.mqtt_lock, 0) == pdFALSE) {
+                return;
+            }
+            if (s_insights_data.data_send_inprogress) {
+                xSemaphoreGive(s_insights_data.mqtt_lock);
+                return;
+            }
+            s_insights_data.data_send_inprogress = true;
+            xSemaphoreGive(s_insights_data.mqtt_lock);
+            esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
+            break;
+        }
+        case RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
+            s_insights_data.log_write_fail_cnt++;
+#if INSIGHTS_DEBUG_ENABLED
+            ESP_LOGI(TAG, "Log write fail count: %d", s_insights_data.log_write_fail_cnt);
+#endif
+            break;
+        default:
+            break;
+    }
 }
 
 static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
@@ -460,6 +512,12 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to register event handler for RMAKER_COMMON_EVENT");
         goto enable_err;
     }
+    /* Register event handler for rtc store events */
+    err = esp_event_handler_register(RTC_STORE_EVENT, ESP_EVENT_ANY_ID, rtc_store_event_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register event handler for RTC_STORE_EVENT");
+        goto enable_err;
+    }
     err = rtc_store_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialise RTC store.");
@@ -516,6 +574,7 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
         ESP_LOGW(TAG, "Failed to initialize network variables");
     }
 #endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
+    esp_diag_variable_register("diag", KEY_LOG_WR_FAIL, "Log write fail count", "Diagnostics.Log", ESP_DIAG_DATA_TYPE_UINT);
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
     err = esp_insights_register_periodic_handler(insights_periodic_handler,
