@@ -13,10 +13,26 @@
 // limitations under the License.
 #pragma once
 #include <esp_err.h>
+#include <esp_event.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief RTC store event base
+ */
+ESP_EVENT_DECLARE_BASE(RTC_STORE_EVENT);
+
+/**
+ * @brief RTC store events
+ */
+typedef enum {
+    RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM,        /*!< Critical data configured threshold crossed */
+    RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL,     /*!< Critical data write failed */
+    RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM,    /*!< Non critical data configured threshold crossed */
+    RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL, /*!< Non critical data write failed */
+} rtc_store_event_t;
 
 /**
  * @brief Non critical data header

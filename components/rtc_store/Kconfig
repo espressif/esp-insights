@@ -20,4 +20,13 @@ menu "RTC Store"
         help
             This option configures the size of critical data buffer and remaining is used for
             non critical data buffer.
+
+    config RTC_STORE_REPORTING_WATERMARK_PERCENT
+        int "Reporting watermark percentage"
+        range 50 90
+        default 80
+        help
+            RTC store has facility to post an event when buffer is filled to a configured level.
+            This option configures the reporting watermark for critical and non critical data.
+
 endmenu
