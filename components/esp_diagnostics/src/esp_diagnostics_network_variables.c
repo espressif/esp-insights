@@ -144,7 +144,7 @@ esp_err_t esp_diag_network_variables_init(void)
     esp_diag_variable_register(TAG_WIFI, KEY_BSSID, "BSSID", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_MAC);
     esp_diag_variable_register(TAG_WIFI, KEY_CHANNEL, "Channel", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
     esp_diag_variable_register(TAG_WIFI, KEY_AUTHMODE, "Auth Mode", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_UINT);
-    esp_diag_variable_register(TAG_WIFI, KEY_REASON, "Wi-Fi disconnect reason", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
+    esp_diag_variable_register(TAG_WIFI, KEY_REASON, "Last Wi-Fi disconnect reason", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
 
     /* IP address variables */
     esp_diag_variable_register(TAG_IP, KEY_IPv4, "IPv4", PATH_IP_STATION, ESP_DIAG_DATA_TYPE_IPv4);
