@@ -183,7 +183,7 @@ void esp_diag_heap_metrics_dump(void)
     esp_diag_metrics_add_uint(KEY_EXT_LFB, lfb);
     esp_diag_metrics_add_uint(KEY_EXT_MIN_FREE, min_free_ever);
 
-    ESP_LOGI(LOG_TAG, EXT_KEY_FREE ":0x%x " EXT_KEY_LFB ":0x%x " EXT_KEY_MIN_FREE ":0x%x", free, lfb, min_free_ever);
+    ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%x " KEY_EXT_LFB ":0x%x " KEY_EXT_MIN_FREE ":0x%x", free, lfb, min_free_ever);
 #endif /* CONFIG_ESP32_SPIRAM_SUPPORT */
 }
 
