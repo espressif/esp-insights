@@ -205,16 +205,6 @@ esp_err_t esp_diag_log_event(const char *tag, const char *format, ...) __attribu
     ESP_LOGI(tag, format, ##__VA_ARGS__); \
 }
 
-#if CONFIG_DIAG_COREDUMP_ENABLE
-/**
- * @brief Erase the core dump stored in flash
- *
- * @return ESP_OK on success
- * @return ESP_ERR_NOT_FOUND if coredump partition not found, appropriate error code otherwise.
- */
-esp_err_t esp_diag_crash_erase(void);
-#endif /* CONFIG_DIAG_COREDUMP_ENABLE */
-
 /**
  * @brief Get the device information for diagnostics
  *

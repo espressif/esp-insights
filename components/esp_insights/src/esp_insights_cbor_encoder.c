@@ -16,9 +16,9 @@
 #include <esp_diagnostics.h>
 #include <cbor.h>
 #include <esp_timer.h>
-#if CONFIG_DIAG_COREDUMP_ENABLE
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 #include <esp_core_dump.h>
-#endif
+#endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 #include <rtc_store.h>
 #include <esp_diagnostics_metrics.h>
 #include <esp_diagnostics_variables.h>
@@ -64,7 +64,7 @@ void esp_insights_cbor_encode_diag_data_end(void)
     cbor_encoder_close_container(&s_diag_map, &s_diag_data_map);
 }
 
-#if CONFIG_DIAG_COREDUMP_ENABLE
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary)
 {
     uint8_t i;
@@ -152,7 +152,7 @@ void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary)
 #endif /* CONFIG_IDF_TARGET_ARCH_RISCV */
     cbor_encoder_close_container(&s_diag_data_map, &crash_map);
 }
-#endif /* CONFIG_DIAG_COREDUMP_ENABLE */
+#endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info)
 {

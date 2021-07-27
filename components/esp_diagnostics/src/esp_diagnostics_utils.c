@@ -50,31 +50,6 @@
 #define TASK_GET_NAME(handle) pcTaskGetTaskName(handle)
 #endif
 
-#if CONFIG_DIAG_COREDUMP_ENABLE
-esp_err_t esp_diag_crash_erase(void)
-{
-    esp_err_t err;
-    const esp_partition_t *partition;
-    static bool s_crash_erased;
-
-    if (s_crash_erased) {
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
-    if (!partition) {
-        return ESP_ERR_NOT_FOUND;
-    }
-    err = esp_partition_erase_range(partition, 0, partition->size);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    s_crash_erased = true;
-    return ESP_OK;
-}
-#endif /* CONFIG_DIAG_COREDUMP_ENABLE */
-
 esp_err_t esp_diag_device_info_get(esp_diag_device_info_t *device_info)
 {
     esp_chip_info_t chip;
