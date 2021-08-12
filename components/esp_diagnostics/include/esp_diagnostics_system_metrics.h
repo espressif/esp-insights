@@ -54,9 +54,7 @@ void esp_diag_heap_metrics_dump(void);
 /**
  * @brief Initialize the wifi metrics
  *
- * Wi-Fi metrics collects the wifi RSSI value.
- * Reporting RSSI based on threshold value is supported from esp-idf release v4.3.
- * If rssi drops below certain threshold it starts reporting RSSI whenever RSSI drops to new low value.
+ * Wi-Fi metrics collects the wifi RSSI and minimum ever RSSI.
  *
  * @return ESP_OK if successful, appropriate error code otherwise.
  */

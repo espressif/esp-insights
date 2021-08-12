@@ -21,40 +21,50 @@
 #define LOG_TAG            "wifi_metrics"
 #define METRICS_TAG        "wifi"
 #define KEY_RSSI           "rssi"
+#define KEY_MIN_RSSI       "min_rssi_ever"
 #define PATH_WIFI_STATION  "Wi-Fi.Station"
 
-#define THRESHOLD_INTERVAL      20   /* Report RSSI whenever it crosses the 20db interval */
+#define THRESHOLD_INTERVAL      10   /* Report RSSI whenever it crosses the 10db step interval */
 #define POLLING_INTERVAL        30   /* 30 seconds */
 #define SEC2TICKS(s)            ((s * 1000) / portTICK_RATE_MS)
+/* start reporting rssi when it reaches -50 dbm */
+#define WIFI_RSSI_THRESHOLD     -50
 
 typedef struct {
     uint32_t period;
     TimerHandle_t handle;
     int32_t prev_rssi;
+    int32_t min_rssi;
 } wifi_diag_priv_data_t;
 
 static wifi_diag_priv_data_t s_priv_data;
 
+static void update_min_rssi(int32_t rssi)
+{
+    if (rssi < s_priv_data.min_rssi) {
+        s_priv_data.min_rssi = rssi;
+        esp_diag_metrics_add_int(KEY_MIN_RSSI, rssi);
+        ets_printf("Wi-Fi RSSI crossed threshold %d\n", rssi);
 #if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+        esp_wifi_set_rssi_threshold(rssi);
+#endif
+    }
+}
 
-/* start reporting rssi when it reaches -50 dbm */
-#define WIFI_RSSI_THRESHOLD -50
-#define KEY_MIN_RSSI       "min_rssi_ever"
+#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
 
 static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, void *evt_data)
 {
     if (evt_base == WIFI_EVENT) {
         switch (evt_id) {
-			case WIFI_EVENT_STA_BSS_RSSI_LOW:
-			{
-				wifi_event_bss_rssi_low_t *data = evt_data;
-				esp_diag_metrics_add_int(KEY_MIN_RSSI, data->rssi);
-                ets_printf("wifi rssi crossed threshold %d\n", data->rssi);
-                esp_wifi_set_rssi_threshold(data->rssi);
-				break;
-			}
-			default:
-				break;
+            case WIFI_EVENT_STA_BSS_RSSI_LOW:
+            {
+                wifi_event_bss_rssi_low_t *data = evt_data;
+                update_min_rssi(data->rssi);
+                break;
+            }
+            default:
+                break;
         }
     }
 }
@@ -76,8 +86,10 @@ static void wifi_timer_cb(TimerHandle_t handle)
     if (rssi == 1) {
         return;
     }
+    update_min_rssi(rssi);
     if ((rssi / THRESHOLD_INTERVAL) != (s_priv_data.prev_rssi / THRESHOLD_INTERVAL)) {
         esp_diag_metrics_add_int(KEY_RSSI, rssi);
+        esp_diag_metrics_add_int(KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
     s_priv_data.prev_rssi = rssi;
 }
@@ -86,9 +98,10 @@ void esp_diag_wifi_metrics_dump(void)
 {
     int32_t rssi = get_rssi();
     if (rssi != 1) {
+        update_min_rssi(rssi);
         esp_diag_metrics_add_int(KEY_RSSI, rssi);
-        ESP_LOGI(LOG_TAG, "%s:%d", KEY_RSSI, rssi);
         s_priv_data.prev_rssi = rssi;
+        ESP_LOGI(LOG_TAG, "%s:%d %s:%d", KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
 }
 
@@ -104,10 +117,11 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     if (err != ESP_OK) {
         ESP_LOGW(LOG_TAG, "Failed to set rssi threshold value");
     }
-    esp_diag_metrics_register(METRICS_TAG, KEY_MIN_RSSI, "Minimum ever Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
 #endif
     esp_diag_metrics_register(METRICS_TAG, KEY_RSSI, "Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
+    esp_diag_metrics_register(METRICS_TAG, KEY_MIN_RSSI, "Minimum ever Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
 
+    s_priv_data.min_rssi = WIFI_RSSI_THRESHOLD;
     s_priv_data.period = POLLING_INTERVAL;
     s_priv_data.handle = xTimerCreate("wifi_metrics", SEC2TICKS(s_priv_data.period),
                                       pdTRUE, NULL, wifi_timer_cb);

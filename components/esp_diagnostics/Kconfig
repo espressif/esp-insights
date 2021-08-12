@@ -64,9 +64,7 @@ menu "Diagnostics"
         bool "Enable Wi-Fi Metrics"
         default n
         help
-            Enables Wi-Fi metrics and collects Wi-Fi RSSI.
-            Reporting RSSI based on threshold value is supported from esp-idf release v4.3.
-            If RSSI drops below certain threshold it starts reporting RSSI whenever RSSI drops to new low value.
+            Enables Wi-Fi metrics and collects Wi-Fi RSSI and minumum ever Wi-Fi RSSI.
 
     config DIAG_ENABLE_VARIABLES
         bool "Enable diagnostics variables"

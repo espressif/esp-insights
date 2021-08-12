@@ -120,7 +120,7 @@ The Insights agent has implemented heap metrics collection and reports free memo
 Enable `CONFIG_DIAG_ENABLE_HEAP_METRICS=y` config option to enable heap metrics.
 
 #### Wi-Fi Metrics
-The Insights agent has also implemented Wi-Fi collecting Wi-Fi signal strength (RSSI) information. The RSSI is collected and recorded only when the RSSI value drops below a pre-configured threshold. The threshold can be configured using [esp_wifi_set_rssi_threshold()](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_wifi.html?highlight=esp_wifi#_CPPv427esp_wifi_set_rssi_threshold7int32_t) API. Note that threshold based RSSI reporting is supported from esp-idf v4.3 and onwards.
+The ESP Insights agent also supports Wi-Fi metrics. It collects Wi-Fi signal strength (RSSI) and minimum ever Wi-Fi signal strength information. RSSI is sampled every 30 seconds and if it crosses 10dB step interval(values in multiples of 10, eg: -10dB, -20dB, -30dB, etc.) in either direction then it gets reported to cloud. From esp-idf v4.3 onwards the minimum ever RSSI is also collected and recorded when the RSSI value drops below a pre-configured threshold. The threshold can be configured using [esp_wifi_set_rssi_threshold()](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_wifi.html?highlight=esp_wifi#_CPPv427esp_wifi_set_rssi_threshold7int32_t) API.
 
 There is also an API to collect and report wifi metrics at any given point in time.
 ```
