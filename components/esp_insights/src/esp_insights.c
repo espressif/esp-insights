@@ -430,6 +430,10 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
     if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (s_insights_data.mqtt_lock) {
+        ESP_LOGW(TAG, "Insights already enabled");
+        return ESP_OK;
+    }
     s_insights_data.mqtt_lock = xSemaphoreCreateMutex();
     if (!s_insights_data.mqtt_lock) {
         ESP_LOGE(TAG, "Failed to create mqtt lock.");
@@ -485,15 +489,13 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
 #if CONFIG_DIAG_ENABLE_HEAP_METRICS
     err = esp_diag_heap_metrics_init();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize heap metrics");
-        return err;
+        ESP_LOGW(TAG, "Failed to initialize heap metrics");
     }
 #endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
 #if CONFIG_DIAG_ENABLE_WIFI_METRICS
     err = esp_diag_wifi_metrics_init();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize wifi metrics");
-        return err;
+        ESP_LOGW(TAG, "Failed to initialize wifi metrics");
     }
 #endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
@@ -511,8 +513,7 @@ static esp_err_t esp_insights_enable(esp_insights_config_t *config)
 #if CONFIG_DIAG_ENABLE_NETWORK_VARIABLES
     err = esp_diag_network_variables_init();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize network variables");
-        return err;
+        ESP_LOGW(TAG, "Failed to initialize network variables");
     }
 #endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
@@ -541,9 +542,12 @@ enable_err:
 esp_err_t esp_insights_init(esp_insights_config_t *config)
 {
     esp_err_t err;
-
     if (!config) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (s_insights_data.mqtt_lock) {
+        ESP_LOGW(TAG, "ESP Insights already initialized");
+        return ESP_OK;
     }
     if (esp_rmaker_factory_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialise factory storage.");

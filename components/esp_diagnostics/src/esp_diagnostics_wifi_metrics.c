@@ -24,10 +24,9 @@
 #define KEY_MIN_RSSI       "min_rssi_ever"
 #define PATH_WIFI_STATION  "Wi-Fi.Station"
 
-#define THRESHOLD_INTERVAL      10   /* Report RSSI whenever it crosses the 10db step interval */
 #define POLLING_INTERVAL        30   /* 30 seconds */
 #define SEC2TICKS(s)            ((s * 1000) / portTICK_RATE_MS)
-/* start reporting rssi when it reaches -50 dbm */
+/* start reporting minimum ever rssi when rssi reaches -50 dbm */
 #define WIFI_RSSI_THRESHOLD     -50
 
 typedef struct {
@@ -87,7 +86,7 @@ static void wifi_timer_cb(TimerHandle_t handle)
         return;
     }
     update_min_rssi(rssi);
-    if ((rssi / THRESHOLD_INTERVAL) != (s_priv_data.prev_rssi / THRESHOLD_INTERVAL)) {
+    if ((rssi / CONFIG_DIAG_WIFI_RSSI_STEP_INTERVAL ) != (s_priv_data.prev_rssi / CONFIG_DIAG_WIFI_RSSI_STEP_INTERVAL)) {
         esp_diag_metrics_add_int(KEY_RSSI, rssi);
         esp_diag_metrics_add_int(KEY_MIN_RSSI, s_priv_data.min_rssi);
     }

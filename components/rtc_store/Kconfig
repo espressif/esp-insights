@@ -1,16 +1,23 @@
 menu "RTC Store"
 
     config RTC_STORE_DATA_SIZE
-        int
-        default 3072
+        int "RTC store data size"
+        default 3072 if IDF_TARGET_ESP32
+        default 7168
+        range 512 7168
+        help
+            RTC data store is divided into two parts to store critical and non-critical data.
+            This option configures the total size of data store.
+            NOTE: On ESP32 devices, from esp-idf release v4.3 and onwards we can use all 8K RTC memory,
+            so max range is specified as 7K. On releases before v4.3 we can only access maximum 4K RTC memory and
+            RTC store uses few bytes for its operation so default for ESP32 is set to 3K.
 
     config RTC_STORE_CRITICAL_DATA_SIZE
         int "Size of critical data store"
-        range 512 2560
-        default 2048
+        default 2048 if IDF_TARGET_ESP32
+        default 5120
+        range 512 RTC_STORE_DATA_SIZE
         help
-            RTC data store is allocated in RTC slow memory and with total size of 3KB.
-            RTC data store is divided into two parts, critical and non-critical.
             This option configures the size of critical data buffer and remaining is used for
             non critical data buffer.
 endmenu

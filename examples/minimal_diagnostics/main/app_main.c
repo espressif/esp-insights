@@ -79,6 +79,10 @@ void app_main(void)
         ESP_LOGE(TAG, "Test error: API nvs_open() failed, error:0x%x", ret);
     }
 
+    /* Enabling the config options CONFIG_DIAG_ENABLE_HEAP_METRICS and CONFIG_DIAG_ENABLE_WIFI_METRICS are enough
+     * to start reporting heap and wifi metrics respectively. Following is done to demostrate the use of
+     * esp_diag_heap_metrics_dump() and esp_diag_wifi_metrics_dump() APIs and view good graphs on the dashboard.
+     */
 #if CONFIG_DIAG_ENABLE_METRICS
     while (true) {
 #if CONFIG_DIAG_ENABLE_HEAP_METRICS
