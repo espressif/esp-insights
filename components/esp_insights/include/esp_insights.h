@@ -41,21 +41,6 @@ typedef struct {
 esp_err_t esp_insights_init(esp_insights_config_t *config);
 
 /**
- * @brief Enable ESP Insights in ESP RainMaker enabled applications
- *
- * This API is for applications which are already using ESP RainMaker.
- * This API must be called after esp_rmaker_node_init() and before esp_rmaker_start().
- *
- * @note For non RainMaker projects please use \ref esp_insights_init().
- *
- * @param[in] config Configuration to be used by the diagnostics.
- *
- * @return ESP_OK on success.
- * @return error in case of failure.
- */
-esp_err_t esp_insights_rmaker_enable(esp_insights_config_t *config);
-
-/**
  * @brief Setup ESP Insights MQTT functions
  *
  * This should be called only if you want to override the default MQTT functions.
