@@ -182,49 +182,136 @@ void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info
 static void encode_msg_args(CborEncoder *element, uint8_t *args, uint8_t args_len)
 {
 #ifdef CONFIG_DIAG_LOG_MSG_ARG_FORMAT_TLV
-    int d;
-    float f;
-    unsigned int u;
     uint8_t type, len, i = 0;
     CborEncoder arg_list;
+    esp_diag_arg_value_t arg_val;
 
     cbor_encoder_create_array(element, &arg_list, CborIndefiniteLength);
     if (!args || !args_len) {
         cbor_encoder_close_container(element, &arg_list);
         return;
     }
-
     while (i < args_len) {
+        memset(&arg_val, 0, sizeof(arg_val));
         type = args[i++];
         len = args[i++];
         switch(type) {
-            case ARG_TYPE_STRING:
-                cbor_encode_text_string(&arg_list, (char *)(args + i), len);
+            case ARG_TYPE_CHAR:
+            case ARG_TYPE_UCHAR:
+            {
+                cbor_encode_simple_value(&arg_list, args[i]);
                 break;
-
-            case ARG_TYPE_FLOAT:
-                memcpy(&f, args + i, len);
-                cbor_encode_float(&arg_list, f);
-                break;
-
-            case ARG_TYPE_INT:
-            case ARG_TYPE_HEX:
-                memcpy(&d, args + i, len);
-                if (d < 0) {
-                    cbor_encode_negative_int(&arg_list, -d);
+            }
+            case ARG_TYPE_SHORT:
+            {
+                memcpy(&arg_val.s, args + i, len);
+                if (arg_val.s < 0) {
+                    cbor_encode_negative_int(&arg_list, -arg_val.s);
                 } else {
-                    cbor_encode_int(&arg_list, d);
+                    cbor_encode_int(&arg_list, arg_val.s);
                 }
                 break;
-
-            case ARG_TYPE_UINT:
-            case ARG_TYPE_POINTER:
-                memcpy(&u, args + i, len);
-                cbor_encode_uint(&arg_list, u);
+            }
+            case ARG_TYPE_INT:
+            {
+                memcpy(&arg_val.i, args + i, len);
+                if (arg_val.i < 0) {
+                    cbor_encode_negative_int(&arg_list, -arg_val.i);
+                } else {
+                    cbor_encode_int(&arg_list, arg_val.i);
+                }
                 break;
-
-            case ARG_TYPE_CHAR:
-                cbor_encode_simple_value(&arg_list, args[i]);
+            }
+            case ARG_TYPE_L:
+            {
+                memcpy(&arg_val.l, args + i, len);
+                if (arg_val.l < 0) {
+                    cbor_encode_negative_int(&arg_list, -arg_val.l);
+                } else {
+                    cbor_encode_int(&arg_list, arg_val.l);
+                }
+                break;
+            }
+            case ARG_TYPE_LL:
+            {
+                memcpy(&arg_val.ll, args + i, len);
+                if (arg_val.ll < 0) {
+                    cbor_encode_negative_int(&arg_list, -arg_val.ll);
+                } else {
+                    cbor_encode_int(&arg_list, arg_val.ll);
+                }
+                break;
+            }
+            case ARG_TYPE_PTRDIFF:
+            {
+                memcpy(&arg_val.ptrdiff, args + i, len);
+                if (arg_val.ptrdiff < 0) {
+                    cbor_encode_negative_int(&arg_list, -arg_val.ptrdiff);
+                } else {
+                    cbor_encode_int(&arg_list, arg_val.ptrdiff);
+                }
+                break;
+            }
+            case ARG_TYPE_INTMAX:
+            {
+                memcpy(&arg_val.imx, args + i, len);
+                if (arg_val.imx < 0) {
+                    cbor_encode_negative_int(&arg_list, -arg_val.imx);
+                } else {
+                    cbor_encode_int(&arg_list, arg_val.imx);
+                }
+                break;
+            }
+            case ARG_TYPE_USHORT:
+            {
+                memcpy(&arg_val.us, args + i, len);
+                cbor_encode_uint(&arg_list, arg_val.us);
+                break;
+            }
+            case ARG_TYPE_UINT:
+            {
+                memcpy(&arg_val.u, args + i, len);
+                cbor_encode_uint(&arg_list, arg_val.u);
+                break;
+            }
+            case ARG_TYPE_UL:
+            {
+                memcpy(&arg_val.ul, args + i, len);
+                cbor_encode_uint(&arg_list, arg_val.ul);
+                break;
+            }
+            case ARG_TYPE_ULL:
+            {
+                memcpy(&arg_val.ull, args + i, len);
+                cbor_encode_uint(&arg_list, arg_val.ull);
+                break;
+            }
+            case ARG_TYPE_SIZE:
+            {
+                memcpy(&arg_val.sz, args + i, len);
+                cbor_encode_uint(&arg_list, arg_val.sz);
+                break;
+            }
+            case ARG_TYPE_UINTMAX:
+            {
+                memcpy(&arg_val.umx, args + i, len);
+                cbor_encode_uint(&arg_list, arg_val.umx);
+                break;
+            }
+            case ARG_TYPE_DOUBLE:
+            {
+                memcpy(&arg_val.d, args + i, len);
+                cbor_encode_double(&arg_list, arg_val.d);
+                break;
+            }
+            case ARG_TYPE_LDOUBLE:
+            {
+                memcpy(&arg_val.ld, args + i, len);
+                cbor_encode_double(&arg_list, arg_val.ld);
+                break;
+            }
+            case ARG_TYPE_STR:
+                cbor_encode_text_string(&arg_list, (char *)(args + i), len);
                 break;
         }
         i += len;
