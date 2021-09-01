@@ -92,17 +92,17 @@ void esp_insights_encode_boottime_data(void)
     esp_insights_cbor_encode_diag_boot_info(&device_info);
 
     /* encode core dump summary */
-#if CONFIG_DIAG_COREDUMP_ENABLE
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
     esp_core_dump_summary_t *summary = malloc(sizeof(esp_core_dump_summary_t));
     if (summary) {
         memset(summary, 0, sizeof(esp_core_dump_summary_t));
         if (esp_core_dump_get_summary(summary) == ESP_OK) {
             esp_insights_cbor_encode_diag_crash(summary);
-            esp_diag_crash_erase();
+            esp_core_dump_image_erase();
         }
         free(summary);
     }
-#endif /* CONFIG_DIAG_COREDUMP_ENABLE */
+#endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 }
 
 void esp_insights_encode_critical_data(const void *critical_data, size_t critical_data_size)

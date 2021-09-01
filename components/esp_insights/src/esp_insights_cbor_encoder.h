@@ -15,16 +15,16 @@
 #include <cbor.h>
 #include <esp_diagnostics_metrics.h>
 #include <esp_diagnostics_variables.h>
-#if CONFIG_DIAG_COREDUMP_ENABLE
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 #include <esp_core_dump.h>
-#endif /* CONFIG_DIAG_COREDUMP_ENABLE */
+#endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 
 void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version, const char *sha256);
 void esp_insights_cbor_encode_diag_data_begin(void);
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info);
-#if CONFIG_DIAG_COREDUMP_ENABLE
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary);
-#endif /* CONFIG_DIAG_COREDUMP_ENABLE */
+#endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 void esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size);
 void esp_insights_cbor_encode_diag_metrics(const uint8_t *data, size_t size);
 void esp_insights_cbor_encode_diag_variables(const uint8_t *data, size_t size);

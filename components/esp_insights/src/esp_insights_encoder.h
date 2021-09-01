@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-#if CONFIG_DIAG_COREDUMP_ENABLE
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 #include <esp_core_dump.h>
 #endif
 

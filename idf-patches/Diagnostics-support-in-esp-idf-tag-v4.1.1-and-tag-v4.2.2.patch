@@ -2,17 +2,18 @@ Diagnostics support in ESP-IDF release v4.1.1 and release v4.2.2
 
 ---
  components/espcoredump/CMakeLists.txt         |   2 +-
- .../espcoredump/include/esp_core_dump.h       |  37 +++++-
+ .../espcoredump/include/esp_core_dump.h       |  46 ++++++-
  .../xtensa/esp_core_dump_summary_extra_info.h |  36 ++++++
  .../include_core_dump/esp_core_dump_port.h    |  28 ++++
  .../include_core_dump/esp_core_dump_priv.h    |   4 +-
  components/espcoredump/src/core_dump_elf.c    | 121 ++++++++++++++++++
+ components/espcoredump/src/core_dump_flash.c  |  34 +++++
  components/espcoredump/src/core_dump_port.c   |  87 +++++++++++++
- 7 files changed, 311 insertions(+), 4 deletions(-)
+ 8 files changed, 354 insertions(+), 4 deletions(-)
  create mode 100644 components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h
 
 diff --git a/components/espcoredump/CMakeLists.txt b/components/espcoredump/CMakeLists.txt
-index bce1224b03..8a3319c44e 100644
+index bce1224b03d..8a3319c44ed 100644
 --- a/components/espcoredump/CMakeLists.txt
 +++ b/components/espcoredump/CMakeLists.txt
 @@ -3,7 +3,7 @@
@@ -25,7 +26,7 @@ index bce1224b03..8a3319c44e 100644
                      LDFRAGMENTS linker.lf
                      PRIV_REQUIRES spi_flash app_update mbedtls esp_rom soc)
 diff --git a/components/espcoredump/include/esp_core_dump.h b/components/espcoredump/include/esp_core_dump.h
-index 7d8d56c5fe..f5ed0e55c1 100644
+index 7d8d56c5fec..c03d3a1636f 100644
 --- a/components/espcoredump/include/esp_core_dump.h
 +++ b/components/espcoredump/include/esp_core_dump.h
 @@ -17,6 +17,32 @@
@@ -70,10 +71,19 @@ index 7d8d56c5fe..f5ed0e55c1 100644
  
  /**
   * @brief  Print base64-encoded core dump to UART.
-@@ -85,4 +111,13 @@ void esp_core_dump_to_uart(XtExcFrame *frame);
+@@ -85,4 +111,22 @@ void esp_core_dump_to_uart(XtExcFrame *frame);
   */
  esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size);
  
++/**
++ * @brief  Erases coredump data in flash. esp_core_dump_image_get() will then return
++ *         ESP_ERR_NOT_FOUND. Can be used after a coredump has been transmitted successfully.
++ *         This function is always available, even when core dump is disabled in menuconfig.
++ *
++ * @return ESP_OK on success, otherwise \see esp_err_t
++ */
++esp_err_t esp_core_dump_image_erase(void);
++
 +/**
 + * @brief  Get the summary of a core dump. This function works only with ELF format core dumps.
 + *
@@ -86,7 +96,7 @@ index 7d8d56c5fe..f5ed0e55c1 100644
  #endif
 diff --git a/components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h b/components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h
 new file mode 100644
-index 0000000000..dc9d9a2cc8
+index 00000000000..dc9d9a2cc80
 --- /dev/null
 +++ b/components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h
 @@ -0,0 +1,36 @@
@@ -127,7 +137,7 @@ index 0000000000..dc9d9a2cc8
 +}
 +#endif
 diff --git a/components/espcoredump/include_core_dump/esp_core_dump_port.h b/components/espcoredump/include_core_dump/esp_core_dump_port.h
-index b6ea923c0f..83772234ec 100644
+index 49090cf3318..72c1beb3515 100644
 --- a/components/espcoredump/include_core_dump/esp_core_dump_port.h
 +++ b/components/espcoredump/include_core_dump/esp_core_dump_port.h
 @@ -28,6 +28,7 @@
@@ -138,7 +148,7 @@ index b6ea923c0f..83772234ec 100644
  
  #ifdef __cplusplus
  extern "C" {
-@@ -86,6 +87,33 @@ uint32_t esp_core_dump_get_isr_stack_end(void);
+@@ -85,6 +86,33 @@ uint32_t esp_core_dump_get_isr_stack_end(void);
  
  void esp_core_dump_report_stack_usage(void);
  
@@ -173,7 +183,7 @@ index b6ea923c0f..83772234ec 100644
  #define COREDUMP_STACK_FILL_BYTE	        (0xa5U)
  extern uint8_t s_coredump_stack[];
 diff --git a/components/espcoredump/include_core_dump/esp_core_dump_priv.h b/components/espcoredump/include_core_dump/esp_core_dump_priv.h
-index d991b05302..2bb9914d13 100644
+index d991b053028..2bb9914d134 100644
 --- a/components/espcoredump/include_core_dump/esp_core_dump_priv.h
 +++ b/components/espcoredump/include_core_dump/esp_core_dump_priv.h
 @@ -11,8 +11,8 @@
@@ -188,7 +198,7 @@ index d991b05302..2bb9914d13 100644
  #ifdef __cplusplus
  extern "C" {
 diff --git a/components/espcoredump/src/core_dump_elf.c b/components/espcoredump/src/core_dump_elf.c
-index ad471db5c5..505e47ce4b 100644
+index 0414178c995..9032290b007 100644
 --- a/components/espcoredump/src/core_dump_elf.c
 +++ b/components/espcoredump/src/core_dump_elf.c
 @@ -15,6 +15,7 @@
@@ -324,8 +334,60 @@ index ad471db5c5..505e47ce4b 100644
 +}
 +
  #endif //CONFIG_ESP32_COREDUMP_DATA_FORMAT_ELF
+diff --git a/components/espcoredump/src/core_dump_flash.c b/components/espcoredump/src/core_dump_flash.c
+index 519e5364dcd..634062e3a32 100644
+--- a/components/espcoredump/src/core_dump_flash.c
++++ b/components/espcoredump/src/core_dump_flash.c
+@@ -24,6 +24,8 @@
+
+ const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_flash";
+
++#define BLANK_COREDUMP_SIZE 0xFFFFFFFF
++
+ #if CONFIG_ESP32_ENABLE_COREDUMP_TO_FLASH
+
+ typedef struct _core_dump_partition_t
+@@ -269,6 +271,38 @@ void esp_core_dump_init(void)
+ }
+ #endif
+
++esp_err_t esp_core_dump_image_erase(void)
++{
++    /* Find the partition that could potentially contain a (previous) core dump. */
++    const esp_partition_t *core_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
++                                                                ESP_PARTITION_SUBTYPE_DATA_COREDUMP,
++                                                                NULL);
++    if (!core_part) {
++        ESP_LOGE(TAG, "No core dump partition found!");
++        return ESP_ERR_NOT_FOUND;
++    }
++    if (core_part->size < sizeof(uint32_t)) {
++        ESP_LOGE(TAG, "Too small core dump partition!");
++        return ESP_ERR_INVALID_SIZE;
++    }
++
++    esp_err_t err = ESP_OK;
++    err = esp_partition_erase_range(core_part, 0, core_part->size);
++    if (err != ESP_OK) {
++        ESP_LOGE(TAG, "Failed to erase core dump partition (%d)!", err);
++        return err;
++    }
++
++    // Mark core dump as deleted by setting field size
++    const uint32_t blank_size = BLANK_COREDUMP_SIZE;
++    err = esp_partition_write(core_part, 0, &blank_size, sizeof(blank_size));
++    if (err != ESP_OK) {
++        ESP_LOGE(TAG, "Failed to write core dump partition size (%d)!", err);
++    }
++
++    return err;
++}
++
+ esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size)
+ {
+     esp_err_t err;
 diff --git a/components/espcoredump/src/core_dump_port.c b/components/espcoredump/src/core_dump_port.c
-index e4fa5ca63a..3272bfd136 100644
+index 6641a9ae427..1f4f607ce8a 100644
 --- a/components/espcoredump/src/core_dump_port.c
 +++ b/components/espcoredump/src/core_dump_port.c
 @@ -18,6 +18,7 @@
@@ -336,7 +398,7 @@ index e4fa5ca63a..3272bfd136 100644
  
  const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_port";
  
-@@ -560,4 +561,90 @@ uint32_t esp_core_dump_get_extra_info(void **info)
+@@ -568,4 +569,90 @@ uint32_t esp_core_dump_get_extra_info(void **info)
      return sizeof(s_extra_info);
  }
  
