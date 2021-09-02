@@ -46,14 +46,47 @@ typedef enum {
  */
 typedef enum {
     ARG_TYPE_CHAR,      /*!< Argument type (char) */
+    ARG_TYPE_SHORT,     /*!< Argument type (short) */
     ARG_TYPE_INT,       /*!< Argument type (int) */
-    ARG_TYPE_FLOAT,     /*!< Argument type (float) */
-    ARG_TYPE_POINTER,   /*!< Argument type (void *) */
-    ARG_TYPE_STRING,    /*!< Argument type (char *) */
+    ARG_TYPE_L,         /*!< Argument type (long) */
+    ARG_TYPE_LL,        /*!< Argument type (long long) */
+    ARG_TYPE_INTMAX,    /*!< Argument type (intmax_t) */
+    ARG_TYPE_PTRDIFF,   /*!< Argument type (ptrdiff_t) */
+    ARG_TYPE_UCHAR,     /*!< Argument type (unsigned char) */
+    ARG_TYPE_USHORT,    /*!< Argument type (unsigned short) */
     ARG_TYPE_UINT,      /*!< Argument type (unsigned int) */
-    ARG_TYPE_HEX,       /*!< Argument type (int) in hex representation) */
+    ARG_TYPE_UL,        /*!< Argument type (unsigned long) */
+    ARG_TYPE_ULL,       /*!< Argument type (unsigned long long) */
+    ARG_TYPE_UINTMAX,   /*!< Argument type (uintmax_t) */
+    ARG_TYPE_SIZE,      /*!< Argument type (size_t) */
+    ARG_TYPE_DOUBLE,    /*!< Argument type (double) */
+    ARG_TYPE_LDOUBLE,   /*!< Argument type (long double) */
+    ARG_TYPE_STR,       /*!< Argument type (char *) */
     ARG_TYPE_INVALID,   /*!< Argument type invalid */
 } esp_diag_arg_type_t;
+
+/**
+ * @brief Log argument data value
+ */
+typedef union {
+    char c;                 /*!< Value of type signed char */
+    short s;                /*!< Value of type signed short */
+    int i;                  /*!< Value of type signed integer */
+    long l;                 /*!< Value of type signed long */
+    long long ll;           /*!< Value of type signed long long */
+    intmax_t imx;           /*!< Value of type intmax_t */
+    ptrdiff_t ptrdiff;      /*!< Value of type ptrdiff_t */
+    unsigned char uc;       /*!< Value of type unsigned char */
+    unsigned short us;      /*!< Value of type unsigned short */
+    unsigned int u;         /*!< Value of type unsigned integer */
+    unsigned long ul;       /*!< Value of type unsigned long */
+    unsigned long long ull; /*!< Value of type unsigned long long */
+    uintmax_t umx;          /*!< Value of type uintmax_t */
+    size_t sz;              /*!< Value of type size_t */
+    double d;               /*!< Value of type double */
+    long double ld;         /*!< Value of type long double */
+    char *str;              /*!< value of type string */
+} esp_diag_arg_value_t;
 
 /**
  * @brief Diagnostics data point type
