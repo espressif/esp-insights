@@ -34,6 +34,19 @@
 #define DIAG_NON_CRITICAL_BUF_SIZE    NON_CRITICAL_DATA_SIZE
 #endif
 
+/* When buffer is filled beyond configured capacity then we post an event.
+ * In case of failure in sending data over the network, new critical data is dropped and
+ * non-critical data is overwritten.
+ */
+
+/* When current free size of buffer drops below (100 - reporting_watermark)% then we post an event */
+#define DIAG_CRITICAL_DATA_REPORTING_WATERMARK \
+    ((DIAG_CRITICAL_BUF_SIZE * (100 - CONFIG_RTC_STORE_REPORTING_WATERMARK_PERCENT)) / 100)
+#define DIAG_NON_CRITICAL_DATA_REPORTING_WATERMARK \
+    ((DIAG_NON_CRITICAL_BUF_SIZE * (100 - CONFIG_RTC_STORE_REPORTING_WATERMARK_PERCENT)) / 100)
+
+ESP_EVENT_DEFINE_BASE(RTC_STORE_EVENT);
+
 typedef struct {
     size_t read_offset;
     uint32_t len;
@@ -134,9 +147,14 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
         rtc_store_write_complete(len, &s_priv_data.critical);
         ret = ESP_OK;
     } else {
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL, data, len, 0);
         ret = ESP_FAIL;
     }
 
+    size_t curr_free = rbuf_get_cur_free_size(s_priv_data.critical.ringbuf);
+    if (curr_free < DIAG_CRITICAL_DATA_REPORTING_WATERMARK) {
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
+    }
     xSemaphoreGive(s_priv_data.critical.lock);
     return ret;
 }
@@ -187,6 +205,11 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     rbuf_send(s_priv_data.non_critical.ringbuf, data, len, 0);
     /* update indices */
     rtc_store_write_complete(req_free, &s_priv_data.non_critical);
+
+    size_t curr_free = rbuf_get_cur_free_size(s_priv_data.non_critical.ringbuf);
+    if (curr_free < DIAG_NON_CRITICAL_DATA_REPORTING_WATERMARK) {
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
+    }
     xSemaphoreGive(s_priv_data.non_critical.lock);
     return ESP_OK;
 }
