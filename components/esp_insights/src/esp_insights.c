@@ -477,7 +477,7 @@ static void esp_insights_deinit(void)
     }
 }
 
-static esp_err_t esp_insights_enable(esp_insights_config_t *config)
+esp_err_t esp_insights_enable(esp_insights_config_t *config)
 {
     if (!config) {
         return ESP_ERR_INVALID_ARG;
@@ -646,11 +646,6 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
 init_err:
     esp_insights_deinit();
     return err;
-}
-
-esp_err_t esp_insights_rmaker_enable(esp_insights_config_t *config)
-{
-    return esp_insights_enable(config);
 }
 
 #endif /* CONFIG_ESP_INSIGHTS_ENABLED */
