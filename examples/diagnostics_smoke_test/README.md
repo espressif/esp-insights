@@ -5,6 +5,12 @@
 - This example is expected to exercise the various features of the ESP Insights framework
 - As a smoke test, this allows you to validate, by a quick perusal of the ESP Insights dashboard, the functioning of all the high-level features
 
+## Prerequisites
+- Before moving ahead please make sure you have already set up ESP IDF and ESP Insights. If not, please check [getting started guide](examples/README.md).
+- In order to report crashes, [Save core dump to flash](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/core_dump.html#save-core-dump-to-flash) config option must be enabled.
+- Also, there must be a partition table entry for coredump and factory partition.
+- In this example, sdkconfig.defaults has the required configuration and partition table is modified accordingly.
+
 ## End-to-End Tests
 
 ### Lifecycle of the test (Hard reset resets the cycle)
