@@ -29,14 +29,6 @@
 #define EXAMPLE_ESP_WIFI_SSID               CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS               CONFIG_ESP_WIFI_PASSWORD
 
-#if CONFIG_DIAG_ENABLE_LOG_TYPE_ALL
-#define EXAMPLE_DIAG_LOG_TYPE               ESP_DIAG_LOG_TYPE_ERROR \
-                                            | ESP_DIAG_LOG_TYPE_WARNING \
-                                            | ESP_DIAG_LOG_TYPE_EVENT
-#else
-#define EXAMPLE_DIAG_LOG_TYPE               0
-#endif /* CONFIG_DIAG_ENABLE_LOG_TYPE_ALL */
-
 #define MAX_CRASHES 5
 #define MAX_PTRS    30
 
@@ -117,7 +109,7 @@ void app_main(void)
     esp_rmaker_time_sync_init(NULL);
 
     esp_insights_config_t config = {
-        .log_type = EXAMPLE_DIAG_LOG_TYPE,
+        .log_type = ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT,
     };
     ret = esp_insights_init(&config);
     if (ret != ESP_OK) {

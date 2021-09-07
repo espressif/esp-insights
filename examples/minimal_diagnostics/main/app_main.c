@@ -29,14 +29,6 @@
 #define EXAMPLE_ESP_WIFI_SSID               CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS               CONFIG_ESP_WIFI_PASSWORD
 
-#if CONFIG_DIAG_ENABLE_LOG_TYPE_ALL
-#define EXAMPLE_DIAG_LOG_TYPE               ESP_DIAG_LOG_TYPE_ERROR \
-                                            | ESP_DIAG_LOG_TYPE_WARNING \
-                                            | ESP_DIAG_LOG_TYPE_EVENT
-#else
-#define EXAMPLE_DIAG_LOG_TYPE               0
-#endif /* CONFIG_DIAG_ENABLE_LOG_TYPE_ALL */
-
 #define METRICS_DUMP_INTERVAL_TICKS         ((600 * 1000) / portTICK_RATE_MS)
 
 static const char *TAG = "minimal_diag";
@@ -64,7 +56,7 @@ void app_main(void)
     esp_rmaker_time_sync_init(NULL);
 
     esp_insights_config_t config = {
-        .log_type = EXAMPLE_DIAG_LOG_TYPE,
+        .log_type = ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT,
     };
     ret = esp_insights_init(&config);
     if (ret != ESP_OK) {
@@ -79,21 +71,16 @@ void app_main(void)
         ESP_LOGE(TAG, "Test error: API nvs_open() failed, error:0x%x", ret);
     }
 
-    /* Enabling the config options CONFIG_DIAG_ENABLE_HEAP_METRICS and CONFIG_DIAG_ENABLE_WIFI_METRICS are enough
+    /* Please make sure CONFIG_DIAG_ENABLE_METRICS, CONFIG_DIAG_ENABLE_WIFI_METRICS, and CONFIG_DIAG_ENABLE_HEAP_METRICS
+     * config options are enabled in order to use esp_diag_heap_metrics_dump() and esp_diag_wifi_metrics_dump() APIs.
+     *
+     * Enabling the config options CONFIG_DIAG_ENABLE_HEAP_METRICS and CONFIG_DIAG_ENABLE_WIFI_METRICS are enough
      * to start reporting heap and wifi metrics respectively. Following is done to demostrate the use of
      * esp_diag_heap_metrics_dump() and esp_diag_wifi_metrics_dump() APIs and view good graphs on the dashboard.
      */
-#if CONFIG_DIAG_ENABLE_METRICS
     while (true) {
-#if CONFIG_DIAG_ENABLE_HEAP_METRICS
         esp_diag_heap_metrics_dump();
-#endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
-
-#if CONFIG_DIAG_ENABLE_WIFI_METRICS
         esp_diag_wifi_metrics_dump();
-#endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
-
         vTaskDelay(METRICS_DUMP_INTERVAL_TICKS);
     }
-#endif /* CONFIG_DIAG_ENABLE_METRICS */
 }

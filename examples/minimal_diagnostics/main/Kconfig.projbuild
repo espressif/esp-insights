@@ -11,11 +11,4 @@ menu "Example Configuration"
         default "mypassword"
         help
             WiFi password (WPA or WPA2) for the example to use.
-
-    config DIAG_ENABLE_LOG_TYPE_ALL
-        bool "Enable all diagnostics log type"
-        default y
-        help
-            By default this example enables error/warning/event diagnostics log types,
-            this config option quickly disables the capture of all diagnostics log types.
 endmenu
