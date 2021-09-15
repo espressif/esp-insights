@@ -82,7 +82,7 @@ cd <path/to/esp-insights>/cli
 
 Once everything is done, just boot up your device and let it run. Once it connects to the Wi-Fi network, it will start reporting diagnostics information.
 
-Once done, any diagnostics information reported will then show up on the [RainMaker dashboard](https://dashboard.rainmaker.espressif.com/). Sign in using the same credentials you used for the RainMaker CLI Login.
+Once done, any diagnostics information reported will then show up on the [Insights dashboard](https://dashboard.rainmaker.espressif.com/). Sign in using the same credentials you used for the RainMaker CLI Login.
 
 ### Uploading the Firmware Package
 

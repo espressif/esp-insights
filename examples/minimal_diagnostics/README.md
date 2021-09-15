@@ -1,15 +1,15 @@
 # Minimal Diagnostics example
 
 ## What to expect in this example?
-
 - This example demonstrates the use of ESP Insights framework in minimal way
 - Device will try to connect with the configured WiFi network
 - ESP Insights is enabled in this example, so any error/warning logs, crashes will be reported to cloud
 - This example collects heap and wifi metrics every 10 minutes and network variables are collected when they change
 
 ## Prerequisites
+- Before moving ahead please make sure you have already set up ESP IDF and ESP Insights. If not, please check [getting started guide](examples/README.md).
 - In order to report crashes, [Save core dump to flash](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/core_dump.html#save-core-dump-to-flash) config option must be enabled.
-- Also there must be a partition table entry for coredump and factory partition.
+- Also, there must be a partition table entry for coredump and factory partition.
 - In this example, sdkconfig.defaults has the required configuration and partition table is modified accordingly.
 
 ### Configure the project
@@ -19,7 +19,6 @@ idf.py menuconfig
 ```
 
 * Set WiFi SSID and WiFi Password
-* Set Cloud post interval and time sync settings.
 
 ### Claim the device
 
