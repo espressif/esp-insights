@@ -388,14 +388,20 @@ static void send_insights_data(void)
 
 static void insights_periodic_handler(void *priv_data)
 {
+    xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
     /* Return if wifi is disconnected */
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK) {
-        xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
         s_insights_data.data_send_inprogress = false;
         xSemaphoreGive(s_insights_data.mqtt_lock);
         return;
     }
+    if (s_insights_data.data_send_inprogress) {
+        xSemaphoreGive(s_insights_data.mqtt_lock);
+        return;
+    }
+    s_insights_data.data_send_inprogress = true;
+    xSemaphoreGive(s_insights_data.mqtt_lock);
 #if SEND_INSIGHTS_META
     if (insights_meta_changed()) {
         send_insights_meta();
@@ -413,16 +419,9 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
     switch(event_id) {
         case RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM:
         {
-            /* If unable to acquire lock then give up and send data next time */
-            if (xSemaphoreTake(s_insights_data.mqtt_lock, 0) == pdFALSE) {
-                return;
-            }
-            if (s_insights_data.data_send_inprogress) {
-                xSemaphoreGive(s_insights_data.mqtt_lock);
-                return;
-            }
-            s_insights_data.data_send_inprogress = true;
-            xSemaphoreGive(s_insights_data.mqtt_lock);
+#if INSIGHTS_DEBUG_ENABLED
+            ESP_LOGI(TAG, "RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM");
+#endif
             esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
             break;
         }
