@@ -3,7 +3,7 @@ menu "RTC Store"
     config RTC_STORE_DATA_SIZE
         int "RTC store data size"
         default 3072 if IDF_TARGET_ESP32
-        default 7168
+        default 6144
         range 512 7168
         help
             RTC data store is divided into two parts to store critical and non-critical data.
@@ -15,7 +15,7 @@ menu "RTC Store"
     config RTC_STORE_CRITICAL_DATA_SIZE
         int "Size of critical data store"
         default 2048 if IDF_TARGET_ESP32
-        default 5120
+        default 4096
         range 512 RTC_STORE_DATA_SIZE
         help
             This option configures the size of critical data buffer and remaining is used for
