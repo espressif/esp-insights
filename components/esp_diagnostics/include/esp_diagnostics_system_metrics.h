@@ -34,6 +34,13 @@ extern "C"
 esp_err_t esp_diag_heap_metrics_init(void);
 
 /**
+ * @brief Deinitialize the heap metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_heap_metrics_deinit(void);
+
+/**
  * @brief Reset the periodic interval
  *
  * @param[in] period Period interval in seconds
@@ -59,6 +66,13 @@ void esp_diag_heap_metrics_dump(void);
  * @return ESP_OK if successful, appropriate error code otherwise.
  */
 esp_err_t esp_diag_wifi_metrics_init(void);
+
+/**
+ * @brief Deinitialize the wifi metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_wifi_metrics_deinit(void);
 
 /**
  * @brief Dumps the wifi metrics and prints them to the console.

@@ -83,6 +83,36 @@ esp_err_t esp_diag_metrics_register(const char *tag, const char *key,
     return ESP_OK;
 }
 
+esp_err_t esp_diag_metrics_unregister(const char *key)
+{
+    int i;
+    if (!key) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    for (i = 0; i < s_priv_data.metrics_count; i++) {
+        if (s_priv_data.metrics[i].key && strcmp(s_priv_data.metrics[i].key, key) == 0) {
+            break;
+        }
+    }
+    if (i < s_priv_data.metrics_count) {
+        s_priv_data.metrics[i] = s_priv_data.metrics[s_priv_data.metrics_count - 1];
+        memset(&s_priv_data.metrics[s_priv_data.metrics_count - 1], 0, sizeof(esp_diag_metrics_meta_t));
+        s_priv_data.metrics_count--;
+        return ESP_OK;
+    }
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t esp_diag_metrics_unregister_all(void)
+{
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    memset(&s_priv_data.metrics, 0, sizeof(s_priv_data.metrics));
+    s_priv_data.metrics_count = 0;
+    return ESP_OK;
+}
+
 const esp_diag_metrics_meta_t *esp_diag_metrics_meta_get_all(uint32_t *len)
 {
     if (!s_priv_data.init) {
@@ -116,6 +146,15 @@ esp_err_t esp_diag_metrics_init(esp_diag_metrics_config_t *config)
     }
     memcpy(&s_priv_data.config, config, sizeof(s_priv_data.config));
     s_priv_data.init = true;
+    return ESP_OK;
+}
+
+esp_err_t esp_diag_metrics_deinit(void)
+{
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }
 

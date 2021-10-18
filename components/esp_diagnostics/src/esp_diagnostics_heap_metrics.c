@@ -49,6 +49,7 @@ typedef struct {
 } heap_metrics_data_pt_t;
 
 typedef struct {
+    bool init;
     uint32_t period;
     TimerHandle_t handle;
     uint32_t prev_min_free_ever;
@@ -77,6 +78,10 @@ static void heap_timer_cb(TimerHandle_t handle)
     uint32_t free;
     uint32_t lfb;
     uint32_t min_free_ever;
+
+    if (!s_priv_data.init) {
+        return;
+    }
 
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
     free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
@@ -165,6 +170,9 @@ static void heap_timer_cb(TimerHandle_t handle)
 
 void esp_diag_heap_metrics_dump(void)
 {
+    if (!s_priv_data.init) {
+        return;
+    }
     uint32_t free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     uint32_t lfb = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
     uint32_t min_free_ever = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
@@ -189,6 +197,9 @@ void esp_diag_heap_metrics_dump(void)
 
 esp_err_t esp_diag_heap_metrics_init(void)
 {
+    if (s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
 #if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 2
     esp_err_t err = heap_caps_register_failed_alloc_callback(alloc_failed_hook);
     if (err != ESP_OK) {
@@ -226,11 +237,39 @@ esp_err_t esp_diag_heap_metrics_init(void)
     if (s_priv_data.handle) {
         xTimerStart(s_priv_data.handle, 0);
     }
+    s_priv_data.init = true;
+    return ESP_OK;
+}
+
+esp_err_t esp_diag_heap_metrics_deinit(void)
+{
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* Try to delete timer with 10 ticks wait time */
+    if (xTimerDelete(s_priv_data.handle, 10) == pdFALSE) {
+        ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
+    }
+#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 2
+    esp_diag_metrics_unregister(KEY_ALLOC_FAIL);
+#endif
+#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
+    esp_diag_metrics_unregister(KEY_EXT_FREE);
+    esp_diag_metrics_unregister(KEY_EXT_LFB);
+    esp_diag_metrics_unregister(KEY_EXT_MIN_FREE);
+#endif
+    esp_diag_metrics_unregister(KEY_FREE);
+    esp_diag_metrics_unregister(KEY_LFB);
+    esp_diag_metrics_unregister(KEY_MIN_FREE);
+    memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }
 
 void esp_diag_heap_metrics_reset_period(uint32_t period)
 {
+    if (!s_priv_data.init) {
+        return;
+    }
     if (period == 0) {
         xTimerStop(s_priv_data.handle, 0);
         return;

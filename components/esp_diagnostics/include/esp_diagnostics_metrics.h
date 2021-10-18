@@ -62,6 +62,13 @@ typedef struct {
 esp_err_t esp_diag_metrics_init(esp_diag_metrics_config_t *config);
 
 /**
+ * @brief Deinitialize the diagnostics metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_deinit(void);
+
+/**
  * @brief Register a metrics
  *
  * @param[in] tag   Tag of metrics
@@ -77,6 +84,22 @@ esp_err_t esp_diag_metrics_register(const char *tag,
                                     const char *label,
                                     const char *path,
                                     esp_diag_data_type_t type);
+
+/**
+ * @brief Unregister a diagnostics metrics
+ *
+ * @param[in] key Key for the metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_unregister(const char *key);
+
+/**
+ * @brief Unregister all previously registered metrics
+ *
+ * @return ESP_OK if successful, qppropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_unregister_all(void);
 
 /**
  * @brief Get metadata for all metrics

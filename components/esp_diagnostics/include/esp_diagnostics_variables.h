@@ -63,6 +63,13 @@ typedef struct {
 esp_err_t esp_diag_variable_init(esp_diag_variable_config_t *config);
 
 /**
+ * @brief Deinitialize the diagnostics variables
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variables_deinit(void);
+
+/**
  * @brief Register a diagnostics variable
  *
  * @param[in] tag   Tag of variable
@@ -78,6 +85,22 @@ esp_err_t esp_diag_variable_register(const char *tag,
                                      const char *label,
                                      const char *path,
                                      esp_diag_data_type_t type);
+
+/**
+ * @brief Unregister a diagnostics variable
+ *
+ * @param[in] key Key for the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_unregister(const char *key);
+
+/**
+ * @brief Unregister all previously registered variables
+ *
+ * @return ESP_OK if successful, qppropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_unregister_all(void);
 
 /**
  * @brief Get metadata for all variables

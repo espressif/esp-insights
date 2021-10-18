@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <string.h>
 #include <esp_log.h>
 #include <esp_wifi.h>
 #include <esp_diagnostics_metrics.h>
@@ -30,6 +31,7 @@
 #define WIFI_RSSI_THRESHOLD     -50
 
 typedef struct {
+    bool init;
     uint32_t period;
     TimerHandle_t handle;
     int32_t prev_rssi;
@@ -81,6 +83,9 @@ static int32_t get_rssi(void)
 
 static void wifi_timer_cb(TimerHandle_t handle)
 {
+    if (!s_priv_data.init) {
+        return;
+    }
     int32_t rssi = get_rssi();
     if (rssi == 1) {
         return;
@@ -95,6 +100,9 @@ static void wifi_timer_cb(TimerHandle_t handle)
 
 void esp_diag_wifi_metrics_dump(void)
 {
+    if (!s_priv_data.init) {
+        return;
+    }
     int32_t rssi = get_rssi();
     if (rssi != 1) {
         update_min_rssi(rssi);
@@ -106,6 +114,9 @@ void esp_diag_wifi_metrics_dump(void)
 
 esp_err_t esp_diag_wifi_metrics_init(void)
 {
+    if (s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
 #if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
     /* Register the event handler for wifi events */
     esp_err_t err = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt_handler, NULL);
@@ -127,7 +138,26 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     if (s_priv_data.handle) {
         xTimerStart(s_priv_data.handle, 0);
     }
+    s_priv_data.init = true;
     /* Record RSSI at start */
     esp_diag_wifi_metrics_dump();
+    return ESP_OK;
+}
+
+esp_err_t esp_diag_wifi_metrics_deinit(void)
+{
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+    esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt_handler);
+#endif
+    /* Try to delete timer with 10 ticks wait time */
+    if (xTimerDelete(s_priv_data.handle, 10) == pdFALSE) {
+        ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
+    }
+    esp_diag_metrics_unregister(KEY_RSSI);
+    esp_diag_metrics_unregister(KEY_MIN_RSSI);
+    memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }
