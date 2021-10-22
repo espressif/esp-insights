@@ -35,6 +35,8 @@ typedef struct {
     uint32_t log_type;
     /** Node id for insights. If NULL then insights agent uses MAC address as node id */
     const char *node_id;
+    /** Authentication key, valid only for https transport */
+    const char *auth_key;
 } esp_insights_config_t;
 
 /**

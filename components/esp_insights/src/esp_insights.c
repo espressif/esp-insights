@@ -270,14 +270,12 @@ static void send_insights_meta(void)
     hex_dump(s_insights_data.scratch_buf, len);
 #endif
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
-    if (msg_id < 0) {
-        ESP_LOGE(TAG, "send_insights_meta esp_insights_transport_data_send failed");
-    } else if (msg_id > 0) {
+    if (msg_id > 0) {
         xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
         s_insights_data.meta_msg_pending = true;
         s_insights_data.meta_msg_id = msg_id;
         xSemaphoreGive(s_insights_data.data_lock);
-    } else { // msg_id == 0
+    } else if (msg_id == 0) {
         esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
     }
 }
@@ -362,10 +360,7 @@ static void send_insights_data(void)
     hex_dump(s_insights_data.scratch_buf, len);
 #endif
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
-    if (msg_id < 0) {
-        ESP_LOGE(TAG, "data_send esp_insights_transport_data_send failed");
-        goto data_send_end;
-    } else if (msg_id > 0) {
+    if (msg_id > 0) {
         xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
         s_insights_data.data_msg_len = critical_data_size;
         s_insights_data.data_msg_id = msg_id;
@@ -561,8 +556,9 @@ void esp_insights_deinit(void)
     esp_insights_transport_unregister();
 }
 
-/* Use the node id provided by user, if it is NULL then try to find node id in factory partition.
- * If not found in factory partition then generate one using MAC address.
+/* Use the node id provided by user, if it is NULL and transport is set to MQTT then
+ * try to find node id in factory partition. If not found in factory partition or in case
+ * of HTTPS transport generate one using mac address
  */
 static esp_err_t esp_insights_set_node_id(const char *node_id)
 {
@@ -573,9 +569,11 @@ static esp_err_t esp_insights_set_node_id(const char *node_id)
         }
         return ESP_OK;
     }
+#ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT
     if (esp_rmaker_factory_init() == ESP_OK) {
         s_insights_data.node_id = esp_rmaker_factory_get("node_id");
     }
+#endif
     if (!s_insights_data.node_id) {
         uint8_t eth_mac[6];
         if (esp_read_mac(eth_mac, ESP_MAC_WIFI_STA) != ESP_OK) {
@@ -680,7 +678,9 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
         err = ESP_ERR_NO_MEM;
         goto enable_err;
     }
-    ESP_LOGI(TAG, "Insights enabled for node_id:%s", s_insights_data.node_id);
+    ESP_LOGI(TAG, "=========================================");
+    ESP_LOGI(TAG, "Insights enabled for Node ID %s", s_insights_data.node_id);
+    ESP_LOGI(TAG, "=========================================");
     return ESP_OK;
 enable_err:
     esp_insights_disable();
@@ -703,7 +703,12 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to set node id");
         return err;
     }
+#ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT
     err = esp_insights_transport_register(&g_default_insights_transport_mqtt);
+#else
+    g_default_insights_transport_https.userdata = (void *)config->auth_key;
+    err = esp_insights_transport_register(&g_default_insights_transport_https);
+#endif
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(TAG, "Failed to register transport");
         goto init_err;
