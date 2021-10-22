@@ -1,6 +1,7 @@
 # ESP Insights
 set(srcs "src/esp_insights.c"
-        "src/esp_insights_mqtt.c"
+        "src/esp_insights_transport.c"
+        "src/transport/esp_insights_mqtt.c"
         "src/esp_insights_client_data.c"
         "src/esp_insights_encoder.c"
         "src/esp_insights_cbor_encoder.c")

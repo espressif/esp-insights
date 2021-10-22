@@ -29,11 +29,6 @@
 extern uint8_t mqtt_server_root_ca_pem_start[] asm("_binary_mqtt_server_crt_start");
 extern uint8_t mqtt_server_root_ca_pem_end[] asm("_binary_mqtt_server_crt_end");
 
-char *esp_insights_get_node_id(void)
-{
-    return esp_rmaker_factory_get(INSIGHTS_NODE_ID);
-}
-
 static char *esp_insights_get_mqtt_host(void)
 {
     return esp_rmaker_factory_get(INSIGHTS_MQTT_HOST_NVS_KEY);
@@ -62,7 +57,7 @@ esp_rmaker_mqtt_conn_params_t *esp_insights_get_mqtt_conn_params(void)
         goto init_err;
     }
     mqtt_conn_params->server_cert = (char *)mqtt_server_root_ca_pem_start;
-    mqtt_conn_params->client_id = esp_insights_get_node_id();
+    mqtt_conn_params->client_id = esp_rmaker_factory_get(INSIGHTS_NODE_ID);
     return mqtt_conn_params;
 init_err:
     if (mqtt_conn_params->mqtt_host) {

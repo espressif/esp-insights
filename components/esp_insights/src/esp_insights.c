@@ -23,21 +23,20 @@
 #include <esp_diagnostics_variables.h>
 #include <esp_diagnostics_system_metrics.h>
 #include <esp_diagnostics_network_variables.h>
-#include <esp_rmaker_common_events.h>
 #include <esp_rmaker_factory.h>
 #include <esp_rmaker_work_queue.h>
 #include <esp_insights.h>
+#include <esp_insights_internal.h>
 
-#include "esp_insights_mqtt.h"
 #include "esp_insights_client_data.h"
 #include "esp_insights_encoder.h"
 
-#define INSIGHTS_TOPIC_SUFFIX       "diagnostics/from-node"
 #define INSIGHTS_DEBUG_ENABLED      CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
 #define APP_ELF_SHA256_LEN          (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
 
 #define CLOUD_REPORTING_PERIOD_MIN_SEC    (1 * 60)  /* 1 minute */
 #define CLOUD_REPORTING_PERIOD_MAX_SEC    (60 * 60)  /* 60 minutes */
+#define CLOUD_REPORTING_TIMEOUT_TICKS     ((30 * 1000) / portTICK_PERIOD_MS)
 
 #if CONFIG_RTC_STORE_DATA_SIZE > (1024 * 4)
 #define INSIGHTS_DATA_MAX_SIZE  (CONFIG_RTC_STORE_DATA_SIZE - 1024)
@@ -47,6 +46,8 @@
 
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 #define KEY_LOG_WR_FAIL    "log_wr_fail"
+
+ESP_EVENT_DEFINE_BASE(INSIGHTS_EVENT);
 
 typedef struct esp_insights_entry {
     esp_rmaker_work_fn_t work_fn;
@@ -59,12 +60,10 @@ typedef struct esp_insights_entry {
 
 typedef struct {
     uint8_t *scratch_buf;
-    int mqtt_pub_msg_id;
-    uint32_t mqtt_pub_msg_len;
-    SemaphoreHandle_t mqtt_lock;
+    int data_msg_id;
+    uint32_t data_msg_len;
+    SemaphoreHandle_t data_lock;
     char app_sha256[APP_ELF_SHA256_LEN];
-    esp_rmaker_mqtt_conn_params_t *mqtt_conn_params;
-    char *node_id;
     bool data_sent;
 #if SEND_INSIGHTS_META
     bool meta_msg_pending;
@@ -72,6 +71,9 @@ typedef struct {
 #endif /* SEND_INSIGHTS_META */
     bool data_send_inprogress;
     uint32_t log_write_fail_cnt; /* Count of failed log write */
+    TimerHandle_t data_send_timer; /* timer to reset data_send_inprogress flag on timeout */
+    char *node_id;
+    int boot_msg_id;   /* To track whether first message is sent or not, -1:failed, 0:success, >0:inprogress */
 } esp_insights_data_t;
 
 #ifdef CONFIG_ESP_INSIGHTS_ENABLED
@@ -91,25 +93,6 @@ static void esp_insights_first_call(void *priv_data)
     xTimerStart(entry->timer, 0);
 }
 
-/* This should be used only from the handler registered using esp_insights_register_periodic_handler(). */
-static esp_err_t esp_insights_send_data(void *data, size_t len, int *msg_id)
-{
-    char publish_topic[100];
-
-    if (!data) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (!s_insights_data.node_id) {
-        return ESP_FAIL;
-    }
-    snprintf(publish_topic, sizeof(publish_topic), "node/%s/%s", s_insights_data.node_id, INSIGHTS_TOPIC_SUFFIX);
-    esp_err_t err = esp_insights_mqtt_publish(publish_topic, data, len, RMAKER_MQTT_QOS1, msg_id);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_insights_mqtt_publish_data returned error %d", err);
-    }
-    return err;
-}
-
 /* This executes in the context of timer task.
  *
  * There is a dynamic logic to decide the next instance when the insights
@@ -125,10 +108,10 @@ static void esp_insights_common_cb(TimerHandle_t handle)
 {
     esp_insights_entry_t *entry = (esp_insights_entry_t *)pvTimerGetTimerID(handle);
     /* Check if any data was sent during the previous time out */
-    xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
+    xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
     bool l_data_sent = s_insights_data.data_sent;
     s_insights_data.data_sent = false;
-    xSemaphoreGive(s_insights_data.mqtt_lock);
+    xSemaphoreGive(s_insights_data.data_lock);
 
     if (entry) {
         esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
@@ -180,47 +163,61 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
     return esp_rmaker_work_queue_add_task(esp_insights_first_call, insights_entry);
 }
 
+static void data_send_timeout_cb(TimerHandle_t handle)
+{
+    xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+    s_insights_data.data_send_inprogress = false;
+    if (s_insights_data.boot_msg_id > 0) {
+        s_insights_data.boot_msg_id = -1;
+    }
+    xSemaphoreGive(s_insights_data.data_lock);
+}
+
 /* This executes in the context of default event loop task */
 static void insights_event_handler(void* arg, esp_event_base_t event_base,
                                    int32_t event_id, void* event_data)
 {
-    int msg_id;
-    if (event_base != RMAKER_COMMON_EVENT) {
+    esp_insights_transport_event_data_t *data = event_data;
+    if (event_base != INSIGHTS_EVENT) {
         return;
     }
     switch(event_id) {
-        case RMAKER_MQTT_EVENT_CONNECTED:
-        /* Checking and populating node id again here, because for some use cases,
-         * the node id may not be available while enabling esp insights, but something
-         * that could be initialised later.
-         */
-            if (!s_insights_data.node_id) {
-                s_insights_data.node_id = esp_insights_get_node_id();
-                if (s_insights_data.node_id) {
-                    ESP_LOGI(TAG, "ESP Insights enabled for Node ID ----- %s", s_insights_data.node_id);
-                }
-            }
-            break;
-        case RMAKER_MQTT_EVENT_PUBLISHED:
-            msg_id = *((int *)event_data);
+        case INSIGHTS_EVENT_TRANSPORT_SEND_SUCCESS:
 #if INSIGHTS_DEBUG_ENABLED
-            ESP_LOGI(TAG, "MQTT Published. Msg id: %d.", msg_id);
+            ESP_LOGI(TAG, "Data send success, msg_id:%d.", data ? data->msg_id : 0);
 #endif
-            if (msg_id) {
-                xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
-                if (msg_id == s_insights_data.mqtt_pub_msg_id) {
-                    rtc_store_critical_data_release(s_insights_data.mqtt_pub_msg_len);
+            if (data && data->msg_id) {
+                xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+                if (xTimerIsTimerActive(s_insights_data.data_send_timer) == pdTRUE) {
+                    xTimerStop(s_insights_data.data_send_timer, portMAX_DELAY);
+                }
+                if (data->msg_id == s_insights_data.data_msg_id) {
+                    rtc_store_critical_data_release(s_insights_data.data_msg_len);
                     s_insights_data.data_sent = true;
                     s_insights_data.data_send_inprogress = false;
+                    if (s_insights_data.boot_msg_id > 0 && s_insights_data.boot_msg_id == data->msg_id) {
+                        s_insights_data.boot_msg_id = 0;
+                    }
 #if SEND_INSIGHTS_META
-                } else if (s_insights_data.meta_msg_pending && msg_id == s_insights_data.meta_msg_id) {
+                } else if (s_insights_data.meta_msg_pending && data->msg_id == s_insights_data.meta_msg_id) {
                     esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
                     s_insights_data.meta_msg_pending = false;
                     s_insights_data.data_sent = true;
 #endif /* SEND_INSIGHTS_META */
                 }
-                xSemaphoreGive(s_insights_data.mqtt_lock);
+                xSemaphoreGive(s_insights_data.data_lock);
             }
+            break;
+        case INSIGHTS_EVENT_TRANSPORT_SEND_FAILED:
+            xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+            if (xTimerIsTimerActive(s_insights_data.data_send_timer) == pdTRUE) {
+                xTimerStop(s_insights_data.data_send_timer, portMAX_DELAY);
+            }
+            s_insights_data.data_send_inprogress = false;
+            if (s_insights_data.boot_msg_id > 0 && data->msg_id == s_insights_data.boot_msg_id) {
+                s_insights_data.boot_msg_id = -1;
+            }
+            xSemaphoreGive(s_insights_data.data_lock);
             break;
         default:
             break;
@@ -258,9 +255,7 @@ static bool insights_meta_changed(void)
 
 static void send_insights_meta(void)
 {
-    int msg_id;
     uint16_t len = 0;
-    esp_err_t err;
 
     memset(s_insights_data.scratch_buf, 0, INSIGHTS_DATA_MAX_SIZE);
     len = esp_insights_encode_meta(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
@@ -274,38 +269,33 @@ static void send_insights_meta(void)
     ESP_LOGI(TAG, "Insights meta data length %d", len);
     hex_dump(s_insights_data.scratch_buf, len);
 #endif
-    err = esp_insights_send_data(s_insights_data.scratch_buf, len, &msg_id);
-    if (err == ESP_OK) {
-        if (msg_id > 0) {
-            xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
-            s_insights_data.meta_msg_pending = true;
-            s_insights_data.meta_msg_id = msg_id;
-            xSemaphoreGive(s_insights_data.mqtt_lock);
-        } else if (msg_id == 0) {
-            esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
-        }
-    } else {
-        ESP_LOGW(TAG, "Insights meta send failed");
+    int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
+    if (msg_id < 0) {
+        ESP_LOGE(TAG, "send_insights_meta esp_insights_transport_data_send failed");
+    } else if (msg_id > 0) {
+        xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+        s_insights_data.meta_msg_pending = true;
+        s_insights_data.meta_msg_id = msg_id;
+        xSemaphoreGive(s_insights_data.data_lock);
+    } else { // msg_id == 0
+        esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
     }
 }
 #endif /* SEND_INSIGHTS_META */
 
 static size_t encode_data(const void *critical_data, size_t critical_data_size,
                           const void *non_critical_data, size_t non_critical_data_size,
-                          void *out_data, size_t out_data_size)
+                          void *out_data, size_t out_data_size, bool encode_boot)
 {
-    static bool first_time = true;
-
     if (!out_data || !out_data_size) {
         return 0;
     }
-    if (!first_time && !critical_data && !non_critical_data) {
+    if (!encode_boot && !critical_data && !non_critical_data) {
         return 0;
     }
     esp_insights_encode_data_begin(out_data, out_data_size, s_insights_data.app_sha256);
-    if (first_time) {
+    if (encode_boot) {
         esp_insights_encode_boottime_data();
-        first_time = false;
     }
     if (critical_data) {
         esp_insights_encode_critical_data(critical_data, critical_data_size);
@@ -329,12 +319,10 @@ static size_t encode_data(const void *critical_data, size_t critical_data_size,
 static void send_insights_data(void)
 {
     uint16_t len = 0;
-    esp_err_t err;
     const void *critical_data = NULL;
     const void *non_critical_data = NULL;
     size_t critical_data_size = 0;
     size_t non_critical_data_size = 0;
-    int msg_id = -1;
 
     memset(s_insights_data.scratch_buf, 0, INSIGHTS_DATA_MAX_SIZE);
 
@@ -350,7 +338,8 @@ static void send_insights_data(void)
     non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
     len = encode_data(critical_data, critical_data_size,
                       non_critical_data, non_critical_data_size,
-                      s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE);
+                      s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE,
+                      s_insights_data.boot_msg_id == -1);
     if (critical_data) {
         /* If any ESP_LOGE, ESP_LOGW is added in between rtc_store_critical_data_read_and_lock()
          * and rtc_store_critical_data_release_and_unlock(), system will be deadlocked.
@@ -366,47 +355,55 @@ static void send_insights_data(void)
 #if INSIGHTS_DEBUG_ENABLED
         ESP_LOGI(TAG, "No data to send");
 #endif
-        return;
+        goto data_send_end;
     }
 #if INSIGHTS_DEBUG_ENABLED
     ESP_LOGI(TAG, "Sending data of length %d to the MQTT Insights topic:", len);
     hex_dump(s_insights_data.scratch_buf, len);
 #endif
-    err = esp_insights_send_data(s_insights_data.scratch_buf, len, &msg_id);
-    if (err == ESP_OK) {
-        if (msg_id > 0) {
-            /* Published with QOS1, store the msg_id and wait for PUBLISHED event */
-            xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
-            s_insights_data.mqtt_pub_msg_len = critical_data_size;
-            s_insights_data.mqtt_pub_msg_id = msg_id;
-            xSemaphoreGive(s_insights_data.mqtt_lock);
-        } else if (msg_id == 0) {
-            /* Published with QOS0, remove the read data from the ringbuffer */
-            rtc_store_critical_data_release(critical_data_size);
-            xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
-            s_insights_data.data_sent = true;
-            s_insights_data.data_send_inprogress = false;
-            xSemaphoreGive(s_insights_data.mqtt_lock);
+    int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
+    if (msg_id < 0) {
+        ESP_LOGE(TAG, "data_send esp_insights_transport_data_send failed");
+        goto data_send_end;
+    } else if (msg_id > 0) {
+        xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+        s_insights_data.data_msg_len = critical_data_size;
+        s_insights_data.data_msg_id = msg_id;
+        if (s_insights_data.boot_msg_id == -1) {
+            s_insights_data.boot_msg_id = msg_id;
+        }
+        xTimerReset(s_insights_data.data_send_timer, portMAX_DELAY);
+        xSemaphoreGive(s_insights_data.data_lock);
+        return;
+    } else if (msg_id == 0) {
+        rtc_store_critical_data_release(critical_data_size);
+        s_insights_data.data_sent = true;
+        if (s_insights_data.boot_msg_id == -1) {
+            s_insights_data.boot_msg_id = 0;
         }
     }
+data_send_end:
+    xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+    s_insights_data.data_send_inprogress = false;
+    xSemaphoreGive(s_insights_data.data_lock);
 }
 
 static void insights_periodic_handler(void *priv_data)
 {
-    xSemaphoreTake(s_insights_data.mqtt_lock, portMAX_DELAY);
+    xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
     /* Return if wifi is disconnected */
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK) {
         s_insights_data.data_send_inprogress = false;
-        xSemaphoreGive(s_insights_data.mqtt_lock);
+        xSemaphoreGive(s_insights_data.data_lock);
         return;
     }
     if (s_insights_data.data_send_inprogress) {
-        xSemaphoreGive(s_insights_data.mqtt_lock);
+        xSemaphoreGive(s_insights_data.data_lock);
         return;
     }
     s_insights_data.data_send_inprogress = true;
-    xSemaphoreGive(s_insights_data.mqtt_lock);
+    xSemaphoreGive(s_insights_data.data_lock);
 #if SEND_INSIGHTS_META
     if (insights_meta_changed()) {
         send_insights_meta();
@@ -451,6 +448,43 @@ static esp_err_t metrics_write_cb(const char *group, void *data, size_t len, voi
 {
     return rtc_store_non_critical_data_write(group, data, len);
 }
+
+static void metrics_init(void)
+{
+    /* Initialize and enable metrics */
+    esp_diag_metrics_config_t metrics_config = {
+        .write_cb = metrics_write_cb,
+        .cb_arg = NULL,
+    };
+    esp_err_t ret = esp_diag_metrics_init(&metrics_config);
+    if (ret == ESP_OK) {
+#if CONFIG_DIAG_ENABLE_HEAP_METRICS
+        ret = esp_diag_heap_metrics_init();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to initialize heap metrics");
+        }
+#endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
+#if CONFIG_DIAG_ENABLE_WIFI_METRICS
+        ret = esp_diag_wifi_metrics_init();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to initialize wifi metrics");
+        }
+#endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
+        return;
+    }
+    ESP_LOGE(TAG, "Failed to initialize metrics.");
+}
+
+static void metrics_deinit(void)
+{
+#if CONFIG_DIAG_ENABLE_HEAP_METRICS
+    esp_diag_heap_metrics_deinit();
+#endif
+#if CONFIG_DIAG_ENABLE_WIFI_METRICS
+    esp_diag_wifi_metrics_deinit();
+#endif
+    esp_diag_metrics_deinit();
+}
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
 
 #if CONFIG_DIAG_ENABLE_VARIABLES
@@ -458,62 +492,149 @@ static esp_err_t variables_write_cb(const char *group, void *data, size_t len, v
 {
     return rtc_store_non_critical_data_write(group, data, len);
 }
+
+static void variables_init(void)
+{
+    /* Initialize and enable variables */
+    esp_diag_variable_config_t variable_config = {
+        .write_cb = variables_write_cb,
+        .cb_arg = NULL,
+    };
+    esp_err_t ret = esp_diag_variable_init(&variable_config);
+    if (ret == ESP_OK) {
+#if CONFIG_DIAG_ENABLE_NETWORK_VARIABLES
+        ret = esp_diag_network_variables_init();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to initialize network variables");
+        }
+#endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
+        esp_diag_variable_register("diag", KEY_LOG_WR_FAIL, "Log write fail count", "Diagnostics.Log", ESP_DIAG_DATA_TYPE_UINT);
+        return;
+    }
+    ESP_LOGE(TAG, "Failed to initialize param-values.");
+}
+
+static void variables_deinit(void)
+{
+#if CONFIG_DIAG_ENABLE_NETWORK_VARIABLES
+    esp_diag_network_variables_deinit();
+#endif
+    esp_diag_variables_deinit();
+}
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-static void esp_insights_deinit(void)
+void esp_insights_disable(void)
 {
-    if (s_insights_data.node_id) {
-        free(s_insights_data.node_id);
-        s_insights_data.node_id = NULL;
+    // TODO: implement esp_insights_unregister_periodic_handler();
+#ifdef CONFIG_DIAG_ENABLE_VARIABLES
+    variables_deinit();
+#endif
+#ifdef CONFIG_DIAG_ENABLE_METRICS
+    metrics_deinit();
+#endif
+    esp_diag_log_hook_disable(ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT);
+    rtc_store_deinit();
+    esp_event_handler_unregister(INSIGHTS_EVENT, ESP_EVENT_ANY_ID, insights_event_handler);
+    esp_event_handler_unregister(RTC_STORE_EVENT, ESP_EVENT_ANY_ID, rtc_store_event_handler);
+    if (s_insights_data.data_lock) {
+        vSemaphoreDelete(s_insights_data.data_lock);
+        s_insights_data.data_lock = NULL;
     }
     if (s_insights_data.scratch_buf) {
         free(s_insights_data.scratch_buf);
         s_insights_data.scratch_buf = NULL;
     }
-    if (s_insights_data.mqtt_lock) {
-        vSemaphoreDelete(s_insights_data.mqtt_lock);
-        s_insights_data.mqtt_lock = NULL;
+    if (s_insights_data.data_send_timer) {
+        xTimerDelete(s_insights_data.data_send_timer, portMAX_DELAY);
+        s_insights_data.data_send_timer = NULL;
     }
-    if (s_insights_data.mqtt_conn_params) {
-        esp_insights_clean_mqtt_conn_params(s_insights_data.mqtt_conn_params);
-        free(s_insights_data.mqtt_conn_params);
-        s_insights_data.mqtt_conn_params = NULL;
+    if (s_insights_data.node_id) {
+        free(s_insights_data.node_id);
+        s_insights_data.node_id = NULL;
     }
+}
+
+void esp_insights_deinit(void)
+{
+    esp_insights_transport_disconnect();
+    esp_insights_disable();
+    esp_insights_transport_unregister();
+}
+
+/* Use the node id provided by user, if it is NULL then try to find node id in factory partition.
+ * If not found in factory partition then generate one using MAC address.
+ */
+static esp_err_t esp_insights_set_node_id(const char *node_id)
+{
+    if (node_id) {
+        s_insights_data.node_id = strdup(node_id);
+        if (!s_insights_data.node_id) {
+            return ESP_ERR_NO_MEM;
+        }
+        return ESP_OK;
+    }
+    if (esp_rmaker_factory_init() == ESP_OK) {
+        s_insights_data.node_id = esp_rmaker_factory_get("node_id");
+    }
+    if (!s_insights_data.node_id) {
+        uint8_t eth_mac[6];
+        if (esp_read_mac(eth_mac, ESP_MAC_WIFI_STA) != ESP_OK) {
+            ESP_LOGE(TAG, "Could not fetch MAC address.");
+            return ESP_FAIL;
+        }
+        s_insights_data.node_id = calloc(1, 13); /* 12 bytes for mac + 1 for NULL terminatation */
+        if (!s_insights_data.node_id) {
+            return ESP_ERR_NO_MEM;
+        }
+        snprintf(s_insights_data.node_id, 13, "%02X%02X%02X%02X%02X%02X",
+                  eth_mac[0], eth_mac[1], eth_mac[2], eth_mac[3], eth_mac[4], eth_mac[5]);
+    }
+    return ESP_OK;
+}
+
+const char *esp_insights_get_node_id(void)
+{
+    return s_insights_data.node_id;
 }
 
 esp_err_t esp_insights_enable(esp_insights_config_t *config)
 {
+    esp_err_t err = ESP_OK;
     if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (s_insights_data.mqtt_lock) {
+    if (s_insights_data.data_lock) {
         ESP_LOGW(TAG, "Insights already enabled");
         return ESP_OK;
     }
-    s_insights_data.mqtt_lock = xSemaphoreCreateMutex();
-    if (!s_insights_data.mqtt_lock) {
-        ESP_LOGE(TAG, "Failed to create mqtt lock.");
+    s_insights_data.data_lock = xSemaphoreCreateMutex();
+    if (!s_insights_data.data_lock) {
+        ESP_LOGE(TAG, "Failed to create data lock.");
         return ESP_ERR_NO_MEM;
+    }
+    err = s_insights_data.node_id ? ESP_OK : esp_insights_set_node_id(config->node_id);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set node id");
+        goto enable_err;
     }
     s_insights_data.scratch_buf = malloc(INSIGHTS_DATA_MAX_SIZE);
     if (!s_insights_data.scratch_buf) {
         ESP_LOGE(TAG, "Failed to allocate memory for scratch buffer.");
-        vSemaphoreDelete(s_insights_data.mqtt_lock);
-        s_insights_data.mqtt_lock = NULL;
-        return ESP_ERR_NO_MEM;
+        err = ESP_ERR_NO_MEM;
+        goto enable_err;
     }
     /* Get sha256 */
     esp_diag_device_info_t device_info;
     memset(&device_info, 0, sizeof(device_info));
-    esp_err_t err = esp_diag_device_info_get(&device_info);
+    err = esp_diag_device_info_get(&device_info);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to get device info");
         goto enable_err;
     }
     memcpy(s_insights_data.app_sha256, device_info.app_elf_sha256, sizeof(s_insights_data.app_sha256));
-    err = esp_event_handler_register(RMAKER_COMMON_EVENT, ESP_EVENT_ANY_ID, insights_event_handler, NULL);
+    err = esp_event_handler_register(INSIGHTS_EVENT, ESP_EVENT_ANY_ID, insights_event_handler, NULL);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register event handler for RMAKER_COMMON_EVENT");
+        ESP_LOGE(TAG, "Failed to register event handler for INSIGHTS_EVENTS");
         goto enable_err;
     }
     /* Register event handler for rtc store events */
@@ -539,91 +660,52 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
     esp_diag_log_hook_enable(config->log_type);
 
 #if CONFIG_DIAG_ENABLE_METRICS
-    /* Initialize and enable metrics */
-    esp_diag_metrics_config_t metrics_config = {
-        .write_cb = metrics_write_cb,
-        .cb_arg = NULL,
-    };
-    err = esp_diag_metrics_init(&metrics_config);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize metrics.");
-    }
-#if CONFIG_DIAG_ENABLE_HEAP_METRICS
-    err = esp_diag_heap_metrics_init();
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to initialize heap metrics");
-    }
-#endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
-#if CONFIG_DIAG_ENABLE_WIFI_METRICS
-    err = esp_diag_wifi_metrics_init();
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to initialize wifi metrics");
-    }
-#endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
+    metrics_init();
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
-
 #if CONFIG_DIAG_ENABLE_VARIABLES
-    /* Initialize and enable param-values */
-    esp_diag_variable_config_t variable_config = {
-        .write_cb = variables_write_cb,
-        .cb_arg = NULL,
-    };
-    err = esp_diag_variable_init(&variable_config);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize param-values.");
-    }
-#if CONFIG_DIAG_ENABLE_NETWORK_VARIABLES
-    err = esp_diag_network_variables_init();
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to initialize network variables");
-    }
-#endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
-    esp_diag_variable_register("diag", KEY_LOG_WR_FAIL, "Log write fail count", "Diagnostics.Log", ESP_DIAG_DATA_TYPE_UINT);
+    variables_init();
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
+    s_insights_data.boot_msg_id = -1;
     err = esp_insights_register_periodic_handler(insights_periodic_handler,
                 CLOUD_REPORTING_PERIOD_MIN_SEC, CLOUD_REPORTING_PERIOD_MAX_SEC, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register insights_periodic_handler.");
         goto enable_err;
     }
-    if (!s_insights_data.node_id) {
-        s_insights_data.node_id = esp_insights_get_node_id();
-        if (s_insights_data.node_id) {
-            ESP_LOGI(TAG, "ESP Insights enabled for Node ID ----- %s", s_insights_data.node_id);
-        }
+    s_insights_data.data_send_timer = xTimerCreate("data_send_timer", CLOUD_REPORTING_TIMEOUT_TICKS,
+                                                   pdFALSE, NULL, data_send_timeout_cb);
+    if (!s_insights_data.data_send_timer) {
+        ESP_LOGE(TAG, "Failed to create data_send_timer.");
+        err = ESP_ERR_NO_MEM;
+        goto enable_err;
     }
+    ESP_LOGI(TAG, "Insights enabled for node_id:%s", s_insights_data.node_id);
     return ESP_OK;
 enable_err:
-    vSemaphoreDelete(s_insights_data.mqtt_lock);
-    s_insights_data.mqtt_lock = NULL;
-    free(s_insights_data.scratch_buf);
-    s_insights_data.scratch_buf = NULL;
+    esp_insights_disable();
     return err;
 }
 
 esp_err_t esp_insights_init(esp_insights_config_t *config)
 {
     esp_err_t err;
-    if (!config) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (s_insights_data.mqtt_lock) {
+    if (s_insights_data.data_lock) {
         ESP_LOGW(TAG, "ESP Insights already initialized");
         return ESP_OK;
     }
-    if (esp_rmaker_factory_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialise factory storage.");
-        return ESP_FAIL;
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
     }
-    s_insights_data.mqtt_conn_params = esp_insights_get_mqtt_conn_params();
-    if (!s_insights_data.mqtt_conn_params) {
-        ESP_LOGE(TAG, "Failed to get MQTT connection parameters.");
-        return ESP_FAIL;
-    }
-    err = esp_insights_mqtt_init(s_insights_data.mqtt_conn_params);
+    /* set node id */
+    err = esp_insights_set_node_id(config->node_id);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialise MQTT, err:%d.", err);
+        ESP_LOGE(TAG, "Failed to set node id");
+        return err;
+    }
+    err = esp_insights_transport_register(&g_default_insights_transport_mqtt);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "Failed to register transport");
         goto init_err;
     }
     err = esp_rmaker_work_queue_init();
@@ -633,12 +715,12 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
     }
     err = esp_insights_enable(config);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to Enable ESP Insights.");
+        ESP_LOGE(TAG, "Failed to enable ESP Insights.");
         goto init_err;
     }
-    err = esp_insights_mqtt_connect();
+    err = esp_insights_transport_connect();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect to MQTT.");
+        ESP_LOGE(TAG, "Failed to connect to transport.");
         goto init_err;
     }
     err = esp_rmaker_work_queue_start();
@@ -648,6 +730,10 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
     }
     return ESP_OK;
 init_err:
+    if (s_insights_data.node_id) {
+        free(s_insights_data.node_id);
+        s_insights_data.node_id = NULL;
+    }
     esp_insights_deinit();
     return err;
 }
