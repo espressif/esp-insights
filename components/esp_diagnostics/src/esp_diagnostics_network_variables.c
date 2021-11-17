@@ -40,6 +40,7 @@
 typedef struct {
     wifi_event_sta_connected_t prev_sta_data;
     bool wifi_connected;
+    bool init;
 } priv_data_t;
 
 static priv_data_t s_priv_data;
@@ -127,6 +128,9 @@ esp_err_t esp_diag_network_variables_init(void)
     wifi_ap_record_t ap_info;
     esp_netif_ip_info_t ip_info;
 
+    if (s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
     /* Register the event handler for wifi events */
     esp_err_t err = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, evt_handler, NULL);
     if (err != ESP_OK) {
@@ -176,5 +180,26 @@ esp_err_t esp_diag_network_variables_init(void)
         esp_diag_variable_add_ipv4(KEY_NETMASK, ip_info.netmask.addr);
         esp_diag_variable_add_ipv4(KEY_GATEWAY, ip_info.gw.addr);
     }
+    s_priv_data.init = true;
+    return ESP_OK;
+}
+
+esp_err_t esp_diag_network_variables_deinit(void)
+{
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, evt_handler);
+    esp_event_handler_unregister(IP_EVENT, ESP_EVENT_ANY_ID, evt_handler);
+    esp_diag_variable_unregister(KEY_CONNECTED);
+    esp_diag_variable_unregister(KEY_SSID);
+    esp_diag_variable_unregister(KEY_BSSID);
+    esp_diag_variable_unregister(KEY_CHANNEL);
+    esp_diag_variable_unregister(KEY_AUTHMODE);
+    esp_diag_variable_unregister(KEY_REASON);
+    esp_diag_variable_unregister(KEY_IPv4);
+    esp_diag_variable_unregister(KEY_NETMASK);
+    esp_diag_variable_unregister(KEY_GATEWAY);
+    memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }

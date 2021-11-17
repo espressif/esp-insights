@@ -29,6 +29,11 @@ extern "C"
  * @return ESP_OK if successful, appropriate error code otherwise.
  */
 esp_err_t esp_diag_network_variables_init(void);
+
+/**
+ * @brief Deinitialize the network variables
+ */
+esp_err_t esp_diag_network_variables_deinit(void);
 #endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
 
 #ifdef __cplusplus
