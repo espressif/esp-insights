@@ -29,6 +29,14 @@ menu "Diagnostics"
             Log arguments are stored in a static allocated buffer.
             This option configures the maximum size of buffer for storing log arguments.
 
+    config DIAG_LOG_DROP_WIFI_LOGS
+        bool "Drop Wi-Fi logs"
+        default y
+        help
+            Every Wi-Fi log printed on the console adds three diagnostics logs.
+            For some users, Wi-Fi logs may not be that useful.
+            By default, diagnostics drops Wi-Fi logs. Set this config option to "n" for recording Wi-Fi logs.
+
     config DIAG_ENABLE_METRICS
         bool "Enable diagnostics metrics"
         default n
