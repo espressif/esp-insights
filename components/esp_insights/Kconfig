@@ -17,4 +17,25 @@ menu "ESP Insights"
             This option enables core dump summary functionality in insights.
             In case of crash, insights sends the core dump summary to cloud on next boot.
 
+    choice ESP_INSIGHTS_TRANSPORT
+        prompt "Insights default transport"
+        default ESP_INSIGHTS_TRANSPORT_HTTPS
+        help
+            By default insights can send data to cloud using MQTT and HTTPS transports.
+            This option configures the default insights transport.
+            Insights transport can be overridden using esp_insights_transport_register API.
+
+        config ESP_INSIGHTS_TRANSPORT_MQTT
+            bool "MQTT"
+
+        config ESP_INSIGHTS_TRANSPORT_HTTPS
+            bool "HTTPS"
+
+    endchoice
+
+    config ESP_INSIGHTS_TRANSPORT_HTTPS_HOST
+        depends on ESP_INSIGHTS_TRANSPORT_HTTPS
+        string "Insights https host"
+        default "https://client.insights.espressif.com"
+
 endmenu

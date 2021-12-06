@@ -14,8 +14,13 @@
 #pragma once
 #include <esp_err.h>
 
+#ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT
 /* Default configurations for rmaker mqtt glue lib */
 extern esp_insights_transport_config_t g_default_insights_transport_mqtt;
+#else
+/* Default configurations for https */
+extern esp_insights_transport_config_t g_default_insights_transport_https;
+#endif
 
 /**
  * @brief Perform transport connect
