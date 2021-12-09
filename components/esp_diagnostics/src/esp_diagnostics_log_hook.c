@@ -403,12 +403,15 @@ void __wrap_esp_log_writev(esp_log_level_t level,
                            const char *format,
                            va_list args)
 {
+#ifndef CONFIG_DIAG_LOG_DROP_WIFI_LOGS
     /* Only collect logs with "wifi" tag */
     if (strcmp(tag, "wifi") == 0) {
         uint32_t pc = 0;
         pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
         esp_diag_log(level, pc, tag, format, args);
     }
+#endif /* !CONFIG_DIAG_LOG_DROP_WIFI_LOGS */
+
     __real_esp_log_writev(level, tag, format, args);
 }
 
