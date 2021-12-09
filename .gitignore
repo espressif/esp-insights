@@ -73,6 +73,8 @@ dkms.conf
 **/cloud_cfg/*.key
 **/cloud_cfg/*.crt
 **/cloud_cfg/*.info
+**/dependencies.lock
+**/managed_components
 
 # node_modules
 docs/docusaurus/website/node_modules
