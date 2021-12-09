@@ -50,6 +50,16 @@
 #define TASK_GET_NAME(handle) pcTaskGetTaskName(handle)
 #endif
 
+/* From esp-idf v5.0 onwards portENTER_CRITICAL_NESTED() and portEXIT_CRITICAL_NESTED() macros are deprecated */
+#if ESP_IDF_VERSION_MAJOR >= 5
+#define DISABLE_INTERRUPTS portSET_INTERRUPT_MASK_FROM_ISR
+#define ENABLE_INTERRUPTS  portCLEAR_INTERRUPT_MASK_FROM_ISR
+#else
+#define DISABLE_INTERRUPTS portENTER_CRITICAL_NESTED
+#define ENABLE_INTERRUPTS  portEXIT_CRITICAL_NESTED
+#endif
+
+
 esp_err_t esp_diag_device_info_get(esp_diag_device_info_t *device_info)
 {
     esp_chip_info_t chip;
@@ -115,7 +125,7 @@ uint32_t esp_diag_task_snapshot_get(esp_diag_task_info_t *tasks, size_t size)
     if (!tasks || !size) {
         return 0;
     }
-    unsigned irq_state = portENTER_CRITICAL_NESTED();
+    unsigned irq_state = DISABLE_INTERRUPTS();
 #if !CONFIG_FREERTOS_UNICORE
     int other_cpu = xPortGetCoreID() ? 0 : 1;
     esp_cpu_stall(other_cpu);
@@ -150,7 +160,7 @@ uint32_t esp_diag_task_snapshot_get(esp_diag_task_info_t *tasks, size_t size)
 #if !CONFIG_FREERTOS_UNICORE
     esp_cpu_unstall(other_cpu);
 #endif
-    portEXIT_CRITICAL_NESTED(irq_state);
+    ENABLE_INTERRUPTS(irq_state);
     return i;
 }
 
