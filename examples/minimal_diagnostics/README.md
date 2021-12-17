@@ -1,4 +1,10 @@
 # Minimal Diagnostics example
+- [What to expect in this example](#what-to-expect-in-this-example)
+- [Prerequisites](#prerequisites)
+- [Try out the example](#try-out-the-example)
+- [Insights Dashboard](#insights-dashboard)
+- [ESP Insights Over MQTT](#esp-insights-over-mqtt)
+- [Understanding the example](#understanding-the-example)
 
 ## What to expect in this example?
 - This example demonstrates the use of ESP Insights framework in minimal way
@@ -12,35 +18,124 @@
 - Also, there must be a partition table entry for coredump and factory partition.
 - In this example, sdkconfig.defaults has the required configuration and partition table is modified accordingly.
 
-### Configure the project
+## Try out the example
+> Below mentioned steps are for using HTTPS protocol. If you want to use ESP Insights over MQTT(TLS) protocol, [click here](#esp-insights-over-mqtt).
 
+### Facilitate the Auth Key
+In this example we will be using the auth key that we downloaded while [setting up ESP Insights account](../README.md#set-up-esp-insights-account).
+
+Copy Auth Key to the example
+```
+cp /path/to/auth/key.txt path/to/esp-insights/examples/minimal_diagnostics/main/insights_auth_key.txt
+```
+
+> NOTE: This example uses _insights_auth_key.txt_ as an auth key filename. If you want to use different filename for auth key, please make appropriate changes in `examples/minimal_diagnostics/main/CMakeLists.txt` and `examples/minimal_diagnostics/main/app_main.c`.
+
+### Configure, Build, and Flash
+```
+cd path/to/esp-insights/examples/minimal_diagnostics
+```
+
+- Configure Wi-Fi SSID and Password (Example Configuration -> WiFi SSID/WiFi Password)
 ```
 idf.py menuconfig
 ```
 
-* Set WiFi SSID and WiFi Password
-
-### Claim the device
-
+- Erase the flash, build and flash the example
 ```
-cd /path/to/esp-insights/cli
-./rainmaker.py claim <port>
+idf.py -p <serial-port> erase_flash build flash
 ```
 
-### Build and Flash
-
-Build the project and flash it to the board, then run monitor tool to view serial output.
-
+### Get the Node ID
+- Start the IDF monitor
 ```
-cd /path/to/esp-insights/examples/minimal_diagnostics
-idf.py build flash monitor
+idf.py -p <serial-port> monitor
 ```
+
+- Once the device boots, it will connect to the Wi-Fi network, look for logs similar to below and make a note of Node ID.
+```
+I (4161) esp_insights: =========================================
+I (4171) esp_insights: Insights enabled for Node ID 246F2880371C
+I (4181) esp_insights: =========================================
+```
+
+
+## Insights Dashboard
+Once everything is set up, any diagnostics information reported will show up on the [Insights Dashboard](https://dashboard.insights.espressif.com). Sign in using the your credentials.
+
+### Upload the Firmware Package
+To get better insights into the diagnostics information, you also need to upload the Firmware package, which consists of the binary, elf, map file and other information useful for analysis. Please upload the package `build/minimal_diagnostics-v1.0.zip` (name format: `build/<project_name>-<fw_version>.zip`) by navigating to the _Firmware Images_ section of the dashboard.
+
+**Important Note**
+
+Commands like `idf.py build`, `idf.py flash`, etc. rebuild the firmware even if there is no change in the code and this also causes the Firmware Package to change. Please make sure that the binary flashed on your board and the firmware package uploaded on the dashboard are in sync. 
+
+### Monitor the device diagnostics
+Visit [Nodes](https://dashboard.insights.espressif.com/home/nodes) section on the dashboard and click on the Node ID to monitor device diagnostics information.
+
+---
+---
+
+## ESP Insights Over MQTT
+ESP Insights with MQTT transport protocol is facilitated through RaimMaker Claiming.
+If you are already using ESP RainMaker, you can check out the documentation [here](https://rainmaker.espressif.com/docs/esp-insights.html) and get started with enabling Insights in your ESP RainMaker examples. However, if you have never used RainMaker and just want to use Insights with MQTT transport protocol, continue with the steps below.
+
+### Set up the CLI (for claiming)
+Set up the esp-rainmaker CLI by following the steps [here](https://rainmaker.espressif.com/docs/cli-setup.html).
+
+- Create account using the CLI
+```
+cd path/to/esp-insights/cli
+./rainmaker.py signup <email>
+./rainmaker.py login [--email <email>]
+```
+> If you prefer using 3rd party login options like Google, Apple or GitHub, please use `./rainmaker.py login` command directly (without the --email option). This will open a page in web browser which has various login options.
+
+### Try out example using MQTT transport protocol
+```
+cd path/to/esp-insights/examples/minimal_diagnostics
+```
+
+- Claiming requires an additional partition table entry, make sure you have `fctry` partition in your partition table.
+```
+fctry, data, nvs, 0x340000, 0x6000,
+```
+
+- Configure the example
+    - Configure the Wi-Fi SSID and Password (Example Configuration -> WiFi SSID/WiFi Password)
+    - Configure the default insights transport to MQTT (Component config → ESP Insights → Insights default transport)
+```
+idf.py menuconfig
+```
+
+- Erase the flash, build and flash the example
+```
+idf.py -p <serial-port> erase_flash build flash
+```
+
+- Claim the device
+
+In order to access the ESP Insights information, you need to have administrator access to a node, which you get by claiming the node. Please use the RainMaker CLI for claiming
+```
+cd path/to/esp-insights/cli
+./rainmaker.py claim <serial-port>
+```
+> Claiming is required even if you are using ESP32-S2 which supports the self claiming feature.
+
+- [Get the Node ID](#get-the-node-id) from device console
+
+### RainMaker Dashboard
+- Visit the [RainMaker Dashboard](https://dashboard.rainmaker.espressif.com/login) and sign in using the same credentials you used for the RainMaker CLI Login.
+- Upload the firmware package as described in [this section](#upload-the-firmware-package).
+- Visit the _Nodes_ section section and click on the Node ID to monitor the device diagnostics information.
 
 ## Understanding the example
 
 ### Code
 
-As you can see in the example's `app_main.c` file, only a single API call is required to enable ESP Insights
+As you can see in the example's `app_main.c` file, only a single API call is required to enable ESP Insights.
+
+User has to provide the log types to enable and the Auth Key if default transport is set to HTTPS. 
 
 ```c
 #include <esp_insights.h>
@@ -49,7 +144,10 @@ As you can see in the example's `app_main.c` file, only a single API call is req
 	...
 	...
 	esp_insights_config_t config = {
-		.log_type = ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT,
+		.log_type = ESP_DIAG_LOG_TYPE_ERROR,
+#ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_HTTPS
+        .auth_key = insights_auth_key_start,
+#endif
 	};
 	esp_insights_init(&config);
 	...
@@ -57,7 +155,7 @@ As you can see in the example's `app_main.c` file, only a single API call is req
 }
 ```
 
-> Note: By default, the logs will get reported every 5 minutes after the device first connects to the cloud. So, it can take upto 5min for the logs to reflect on the dashboard. Moreover, if a large number of logs are generated within that time, filling up the buffers, any newer logs will be dropped.
+> Note: Diagnostics data is reported dynamically or when the buffers are filled to configured threshold. So, it can take some time for the logs to reflect on the dashboard. Moreover, if a large number of logs are generated then data will be sent to cloud but, if it fails(eg reasons: Wi-Fi failure, No internet) then any newer logs will be dropped.
 
 ### Configurations
 

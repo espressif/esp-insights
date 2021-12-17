@@ -20,7 +20,6 @@
 extern "C"
 {
 #endif
-char *esp_insights_get_node_id(void);
 esp_rmaker_mqtt_conn_params_t *esp_insights_get_mqtt_conn_params(void);
 void esp_insights_clean_mqtt_conn_params(esp_rmaker_mqtt_conn_params_t *mqtt_conn_params);
 esp_err_t esp_insights_meta_nvs_crc_get(uint32_t *crc);

@@ -19,10 +19,12 @@
 extern "C" {
 #endif
 
+/** @cond **/
 /**
  * @brief RTC store event base
  */
 ESP_EVENT_DECLARE_BASE(RTC_STORE_EVENT);
+/** @endcond **/
 
 /**
  * @brief RTC store events
@@ -46,7 +48,7 @@ typedef struct {
  * @brief Write critical data to the RTC storage
  *
  * @param[in] data Pointer to the data
- * @prarm[in] len Length of data
+ * @param[in] len Length of data
  *
  * @return ESP_OK on success, appropriate error code otherwise.
  */
@@ -60,7 +62,7 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len);
  * @return Pointer to the data on success, otherwise NULL
  *
  * @note It is mandatory to call \ref rtc_store_critical_data_release_and_unlock() if \ref rtc_store_critical_data_read_and_lock() is successful.
- * @note Please avoid adding ESP_DIAG_EVENT, error/warning logs using esp_log module in between rtc_store_critical_data_read_and_lock() and rtc_store_critical_data_release_and_unlock() API calls. It may lead to a deadlock.
+ * @note Please avoid adding \ref ESP_DIAG_EVENT(), error/warning logs using esp_log module in between rtc_store_critical_data_read_and_lock() and rtc_store_critical_data_release_and_unlock() API calls. It may lead to a deadlock.
  */
 const void *rtc_store_critical_data_read_and_lock(size_t *size);
 
@@ -74,7 +76,7 @@ const void *rtc_store_critical_data_read_and_lock(size_t *size);
  *
  * @return ESP_OK on success, appropriate error code otherwise.
  *
- * @note Please avoid adding ESP_DIAG_EVENT, error/warning logs using esp_log module in between rtc_store_critical_data_read_and_lock() and rtc_store_critical_data_release_and_unlock() API calls. It may lead to a deadlock.
+ * @note Please avoid adding \ref ESP_DIAG_EVENT(), error/warning logs using esp_log module in between rtc_store_critical_data_read_and_lock() and rtc_store_critical_data_release_and_unlock() API calls. It may lead to a deadlock.
  */
 esp_err_t rtc_store_critical_data_release_and_unlock(size_t size);
 
@@ -83,8 +85,8 @@ esp_err_t rtc_store_critical_data_release_and_unlock(size_t size);
  *
  * This API can be used to remove data from buffer when data is sent asynchronously.
  *
- * Consider data is read using \ref rtc_store_critical_data_read_and_lock and sent to cloud asynchronously.
- * Since status of data send is unknown, call \ref rtc_store_critical_data_release_and_unlock with zero length.
+ * Consider data is read using \ref rtc_store_critical_data_read_and_lock() and sent to cloud asynchronously.
+ * Since status of data send is unknown, call \ref rtc_store_critical_data_release_and_unlock() with zero length.
  * When acknowledgement for data send is received use this API with appropriate size to remove the data from the buffer.
  *
  * @param[in] size Number of bytes to free.

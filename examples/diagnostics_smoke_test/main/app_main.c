@@ -32,6 +32,11 @@
 #define MAX_CRASHES 5
 #define MAX_PTRS    30
 
+#ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_HTTPS
+extern const char insights_auth_key_start[] asm("_binary_insights_auth_key_txt_start");
+extern const char insights_auth_key_end[] asm("_binary_insights_auth_key_txt_end");
+#endif
+
 static const char *TAG = "diag_smoke";
 RTC_NOINIT_ATTR static uint32_t s_reset_count;
 static void *s_ptrs[MAX_PTRS];
@@ -110,6 +115,9 @@ void app_main(void)
 
     esp_insights_config_t config = {
         .log_type = ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT,
+#ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_HTTPS
+        .auth_key = insights_auth_key_start,
+#endif
     };
     ret = esp_insights_init(&config);
     if (ret != ESP_OK) {

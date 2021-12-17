@@ -48,6 +48,8 @@ before_script:
 - echo Building minimal_diagnostics app - Started
 - ls
 - cd $CI_PROJECT_DIR/examples/minimal_diagnostics
+# Build this for MQTT transport
+- echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
 - echo Running idf.py
 - idf.py build
 - echo Building minimal_diagnostics app - Done
@@ -61,7 +63,10 @@ before_script:
 - ls
 - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
 
-# esp-idf branch:master, target:ESP32
+# Build this example for HTTPS transport, insights_auth_key.txt file is required
+- touch main/insights_auth_key.txt
+
+# esp-idf tag v4.3, target:ESP32
 - echo Building app on esp-idf master for ESP32
 - idf.py set-target esp32
 - idf.py build
@@ -70,13 +75,13 @@ before_script:
 - cp $CI_PROJECT_DIR/examples/diagnostics_smoke_test/build/diagnostics_smoke_test.bin $CI_PROJECT_DIR/insights-bins-${CI_JOB_ID}/
 - rm -rf build sdkconfig
 
-# esp-idf branch:master, target:ESP32S2
+# esp-idf tag v4.3, target:ESP32S2
 - echo Building app on esp-idf master for ESP32S2
 - idf.py set-target esp32s2
 - idf.py build
 - rm -rf build sdkconfig
 
-# esp-idf branch:master, target:ESP32C3
+# esp-idf tag v4.3, target:ESP32C3
 - echo Building app on esp-idf master for ESP32C3
 - idf.py set-target esp32c3
 - idf.py build
