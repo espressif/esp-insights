@@ -1,18 +1,17 @@
-Diagnostics support in ESP-IDF release v4.3
+Diagnostics support in ESP-IDF release v4.3.2
 
 ---
  components/espcoredump/CMakeLists.txt         |  13 +-
  components/espcoredump/Kconfig                |   9 ++
  components/espcoredump/component.mk           |   2 +
- .../espcoredump/include/esp_core_dump.h       |  57 ++++++++
+ .../espcoredump/include/esp_core_dump.h       |  48 +++++++
  .../port/riscv/esp_core_dump_summary_port.h   |  55 ++++++++
  .../port/xtensa/esp_core_dump_summary_port.h  |  54 +++++++
  .../include_core_dump/esp_core_dump_port.h    |  32 +++++
  components/espcoredump/src/core_dump_elf.c    | 133 ++++++++++++++++++
- components/espcoredump/src/core_dump_flash.c  |  34 +++++
  .../src/port/riscv/core_dump_port.c           |  70 +++++++++
  .../src/port/xtensa/core_dump_port.c          |  95 +++++++++++++
- 11 files changed, 549 insertions(+), 5 deletions(-)
+ 10 files changed, 506 insertions(+), 5 deletions(-)
  create mode 100644 components/espcoredump/include/port/riscv/esp_core_dump_summary_port.h
  create mode 100644 components/espcoredump/include/port/xtensa/esp_core_dump_summary_port.h
 
@@ -50,13 +49,13 @@ index 110e2d95541..b5cc82410c0 100644
                      LDFRAGMENTS linker.lf
                      PRIV_REQUIRES spi_flash app_update mbedtls esp_rom soc)
 diff --git a/components/espcoredump/Kconfig b/components/espcoredump/Kconfig
-index 83811c76cd0..fe059f21a4b 100644
+index 91344138327..28a54a02a60 100644
 --- a/components/espcoredump/Kconfig
 +++ b/components/espcoredump/Kconfig
-@@ -82,6 +82,15 @@ menu "Core dump"
+@@ -90,6 +90,15 @@ menu "Core dump"
              To ensure that core dump itself will not overflow task/ISR stack set this to the value above 800.
              NOTE: It eats DRAM.
-
+ 
 +    config ESP_COREDUMP_SUMMARY_STACKDUMP_SIZE
 +        int "Size of the stack dump buffer"
 +        depends on ESP_COREDUMP_DATA_FORMAT_ELF && ESP_COREDUMP_ENABLE_TO_FLASH && IDF_TARGET_ARCH_RISCV
@@ -74,26 +73,26 @@ index 8a2c1d439fb..439f80a44d9 100644
 --- a/components/espcoredump/component.mk
 +++ b/components/espcoredump/component.mk
 @@ -5,10 +5,12 @@ COMPONENT_ADD_LDFRAGMENTS += linker.lf
-
+ 
  ifdef CONFIG_IDF_TARGET_ARCH_XTENSA
  	COMPONENT_SRCDIRS += src/port/xtensa
 +	COMPONENT_ADD_INCLUDEDIRS += include/port/xtensa
  	COMPONENT_PRIV_INCLUDEDIRS += include_core_dump/port/xtensa
  endif
-
+ 
  ifdef CONFIG_IDF_TARGET_ARCH_RISCV
  	COMPONENT_SRCDIRS += src/port/riscv
 +	COMPONENT_ADD_INCLUDEDIRS += include/port/riscv
  	COMPONENT_PRIV_INCLUDEDIRS += include_core_dump/port/riscv
  endif
 diff --git a/components/espcoredump/include/esp_core_dump.h b/components/espcoredump/include/esp_core_dump.h
-index fb0d44d2c81..4fa76cad7c5 100644
+index 7854d4a51d7..40fd90d8b26 100644
 --- a/components/espcoredump/include/esp_core_dump.h
 +++ b/components/espcoredump/include/esp_core_dump.h
 @@ -14,14 +14,36 @@
  #ifndef ESP_CORE_DUMP_H_
  #define ESP_CORE_DUMP_H_
-
+ 
 +#include "sdkconfig.h"
  #include <stddef.h>
  #include "esp_err.h"
@@ -127,19 +126,10 @@ index fb0d44d2c81..4fa76cad7c5 100644
  /**************************************************************************************/
  /******************************** EXCEPTION MODE API **********************************/
  /**************************************************************************************/
-@@ -89,6 +111,41 @@ void esp_core_dump_to_uart(panic_info_t *info);
+@@ -111,6 +133,32 @@ esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size);
   */
- esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size);
+ esp_err_t esp_core_dump_image_erase(void);
  
-+/**
-+ * @brief  Erases coredump data in flash. esp_core_dump_image_get() will then return
-+ *         ESP_ERR_NOT_FOUND. Can be used after a coredump has been transmitted successfully.
-+ *         This function is always available, even when core dump is disabled in menuconfig.
-+ *
-+ * @return ESP_OK on success, otherwise \see esp_err_t
-+ */
-+esp_err_t esp_core_dump_image_erase(void);
-+
 +#if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF
 +
 +/**
@@ -297,7 +287,7 @@ index 1dd6cd7ab9a..b99beb32ecd 100644
 @@ -24,12 +24,14 @@
   * both Xtensa and RISC-V architecture.
   */
-
+ 
 +#include "sdkconfig.h"
  #include "freertos/FreeRTOS.h"
  #include "soc/cpu.h"
@@ -495,58 +485,6 @@ index 5c6bf1eb85c..58bd691ecf0 100644
 +#endif // CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
 +
  #endif //CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF
-diff --git a/components/espcoredump/src/core_dump_flash.c b/components/espcoredump/src/core_dump_flash.c
-index cf63d7539fa..5df24db854c 100644
---- a/components/espcoredump/src/core_dump_flash.c
-+++ b/components/espcoredump/src/core_dump_flash.c
-@@ -20,6 +20,8 @@
- #include "esp_flash_encrypt.h"
- #include "esp_rom_crc.h"
-
-+#define BLANK_COREDUMP_SIZE 0xFFFFFFFF
-+
- const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_flash";
-
- #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
-@@ -349,6 +351,38 @@ void esp_core_dump_init(void)
-     }
- }
-
-+esp_err_t esp_core_dump_image_erase(void)
-+{
-+    /* Find the partition that could potentially contain a (previous) core dump. */
-+    const esp_partition_t *core_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
-+                                                                ESP_PARTITION_SUBTYPE_DATA_COREDUMP,
-+                                                                NULL);
-+    if (!core_part) {
-+        ESP_LOGE(TAG, "No core dump partition found!");
-+        return ESP_ERR_NOT_FOUND;
-+    }
-+    if (core_part->size < sizeof(uint32_t)) {
-+        ESP_LOGE(TAG, "Too small core dump partition!");
-+        return ESP_ERR_INVALID_SIZE;
-+    }
-+
-+    esp_err_t err = ESP_OK;
-+    err = esp_partition_erase_range(core_part, 0, core_part->size);
-+    if (err != ESP_OK) {
-+        ESP_LOGE(TAG, "Failed to erase core dump partition (%d)!", err);
-+        return err;
-+    }
-+
-+    // Mark core dump as deleted by setting field size
-+    const uint32_t blank_size = BLANK_COREDUMP_SIZE;
-+    err = esp_partition_write(core_part, 0, &blank_size, sizeof(blank_size));
-+    if (err != ESP_OK) {
-+        ESP_LOGE(TAG, "Failed to write core dump partition size (%d)!", err);
-+    }
-+
-+    return err;
-+}
-+
- esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size)
- {
-     esp_err_t err = ESP_OK;
 diff --git a/components/espcoredump/src/port/riscv/core_dump_port.c b/components/espcoredump/src/port/riscv/core_dump_port.c
 index cbe20e0d4ed..ef55e59e729 100644
 --- a/components/espcoredump/src/port/riscv/core_dump_port.c

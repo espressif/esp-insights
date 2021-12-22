@@ -15,7 +15,7 @@ git clone --recursive https://github.com/espressif/esp-insights.git
 
 
 ## Set up ESP IDF
-Using the ESP Insights requires either the [`master branch`](https://github.com/espressif/esp-idf/tree/master), [`release v4.3`](https://github.com/espressif/esp-idf/releases/tag/v4.3), [`release v4.2.2`](https://github.com/espressif/esp-idf/releases/tag/v4.2.2) or [`release v4.1.1`](https://github.com/espressif/esp-idf/releases/tag/v4.1.1) of esp-idf. Set up ESP IDF, if not done already using the steps [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html) and switch to the appropriate branch or release tag. The below example shows steps for master branch. Just replace `master` with your branch name/tag if you are using any of the other supported IDF versions.
+Using the ESP Insights requires either the [`master branch`](https://github.com/espressif/esp-idf/tree/master), [`release v4.3.2`](https://github.com/espressif/esp-idf/releases/tag/v4.3.2), [`release v4.2.2`](https://github.com/espressif/esp-idf/releases/tag/v4.2.2) or [`release v4.1.2`](https://github.com/espressif/esp-idf/releases/tag/v4.1.2) of esp-idf. Set up ESP IDF, if not done already using the steps [here](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html) and switch to the appropriate branch or release tag. The below example shows steps for master branch. Just replace `master` with your branch name/tag if you are using any of the other supported IDF versions.
 
 ESP Insights works out of the box with esp-idf `master` branch.
 
@@ -26,16 +26,16 @@ git pull origin master
 git submodule update --init --recursive
 ```
 
-However on `release v4.3`, `release v4.2.2`, and `release v4.1.1` it is supported with the help of a patch.
+However on `release v4.3.2`, `release v4.2.2`, and `release v4.1.2` it is supported with the help of a patch.
 
-### For ESP-IDF release v4.3
+### For ESP-IDF release v4.3.2
 ```
-git apply -v path/to/esp-insights/idf-patches/Diagnostics-support-in-esp-idf-tag-v4.3.patch
+git apply -v path/to/esp-insights/idf-patches/Diagnostics-support-in-esp-idf-tag-v4.3.2.patch
 ```
 
-### For ESP-IDF release v4.1.1 and release v4.2.2
+### For ESP-IDF release v4.1.2 and release v4.2.2
 ```
-git apply -v path/to/esp-insights/idf-patches/Diagnostics-support-in-esp-idf-tag-v4.1.1-and-tag-v4.2.2.patch
+git apply -v path/to/esp-insights/idf-patches/Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch
 ```
 
 
