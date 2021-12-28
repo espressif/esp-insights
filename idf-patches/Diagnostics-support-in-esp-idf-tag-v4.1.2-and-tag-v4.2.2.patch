@@ -1,4 +1,4 @@
-Diagnostics support in ESP-IDF release v4.1.1 and release v4.2.2
+Diagnostics support in ESP-IDF release v4.1.2 and release v4.2.2
 
 ---
  components/espcoredump/CMakeLists.txt         |   2 +-
