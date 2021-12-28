@@ -68,6 +68,7 @@ typedef struct {
 #if SEND_INSIGHTS_META
     bool meta_msg_pending;
     uint32_t meta_msg_id;
+    uint32_t meta_crc;
 #endif /* SEND_INSIGHTS_META */
     bool data_send_inprogress;
     uint32_t log_write_fail_cnt; /* Count of failed log write */
@@ -200,7 +201,7 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                     }
 #if SEND_INSIGHTS_META
                 } else if (s_insights_data.meta_msg_pending && data->msg_id == s_insights_data.meta_msg_id) {
-                    esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
+                    esp_insights_meta_nvs_crc_set(s_insights_data.meta_crc);
                     s_insights_data.meta_msg_pending = false;
                     s_insights_data.data_sent = true;
 #endif /* SEND_INSIGHTS_META */
@@ -250,6 +251,7 @@ static bool insights_meta_changed(void)
         return false;
     }
     ESP_LOGI(TAG, "Insights metrics metadata changed");
+    s_insights_data.meta_crc = meta_crc;
     return true;
 }
 
@@ -276,7 +278,7 @@ static void send_insights_meta(void)
         s_insights_data.meta_msg_id = msg_id;
         xSemaphoreGive(s_insights_data.data_lock);
     } else if (msg_id == 0) {
-        esp_insights_meta_nvs_crc_set(esp_diag_meta_crc_get());
+        esp_insights_meta_nvs_crc_set(s_insights_data.meta_crc);
     }
 }
 #endif /* SEND_INSIGHTS_META */
