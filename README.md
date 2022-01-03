@@ -145,14 +145,14 @@ esp_diag_metrics_register("temp", "temp1", "Room temperature", "room", ESP_DIAG_
 
 /* Record a data point for room temperature */
 uint32_t room_temp = get_room_temperature();
-esp_diag_metrics_add_uint("temp1", &room_temp);
+esp_diag_metrics_add_uint("temp1", room_temp);
 ```
 
 As you may notice, every metric has some metadata associated with it. Some explanations of these fields:
-- "temp" - Tag for the metrics, group of metrics can be enabled/disabled based on the tag
+- "temp" - Tag is for grouping similar metrics together
 - "temp1" - A unique key identifying the metric
-- "Room temperature" - The label that should be shown on the Insights dashboard
-- "room" - Hierarchical path to group metrics for easy navigation
+- "Temperature" - The label that is shown on the dashboard
+- "Home.Kitchen" - Hierarchical path to group metrics for easy navigation on the dashboard
 - ESP_DIAG_DATA_TYPE_UINT - Data type
 
 ### Variables
@@ -167,7 +167,7 @@ The Insights agent can record a set of pre-defined system variables. Additionall
 #### Network Variables
 The Insights module currently records some of the following network variables.
 
-* For Wi-Fi: connection status, SSID, BSSID, Channel, Authentication mode, and wifi disconnection reason
+* For Wi-Fi: SSID, BSSID, Channel, Authentication mode, and wifi disconnection reason
 * For IP: IP address, gateway, and netmask parameters
 
 You should enable `CONFIG_DIAG_ENABLE_NETWORK_VARIABLES` config option to enable network variables.
@@ -181,14 +181,14 @@ It is fairly simple to register your own variables as well. This can be done as:
 esp_diag_variable_register("wifi", "sta_cnt", "STAs associated", "wifi.sta", ESP_DIAG_DATA_TYPE_UINT);
 
 /* Assuming WIFI_EVENT_AP_STACONNECTED and WIFI_EVENT_AP_STADISCONNECTED events track the number of associated stations */
-esp_diag_variable_add_uint("sta_cnt", &sta_cnt);
+esp_diag_variable_add_uint("sta_cnt", sta_cnt);
 ```
 
 As you may notice, every variable has some metadata associated with it. Some explanations of these fields:
-- "wifi" - Tag for the variables, group of variables can be enabled/disabled based on the tag
+- "wifi" - Tag is for grouping similar variables together
 - "sta_cnt" - A unique key identifying the variable
 - "STAs associated" - The label that should be shown on the Insights dashboard
-- "wifi.sta" - Hierarchical path to group variables for easy navigation
+- "wifi.sta" - Hierarchical path to group variables for easy navigation on the dashboard
 - ESP_DIAG_DATA_TYPE_UINT - Data type
 
 ### Transport Sharing
