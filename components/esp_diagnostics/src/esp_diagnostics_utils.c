@@ -50,8 +50,12 @@
 #define TASK_GET_NAME(handle) pcTaskGetTaskName(handle)
 #endif
 
-/* From esp-idf v5.0 onwards portENTER_CRITICAL_NESTED() and portEXIT_CRITICAL_NESTED() macros are deprecated */
+/* From esp-idf v5.0 onwards
+ * - portENTER_CRITICAL_NESTED() and portEXIT_CRITICAL_NESTED() macros are deprecated
+ * - freertos/task_snapshot.h has been removed from freertos/task.h
+ */
 #if ESP_IDF_VERSION_MAJOR >= 5
+#include "freertos/task_snapshot.h"
 #define DISABLE_INTERRUPTS portSET_INTERRUPT_MASK_FROM_ISR
 #define ENABLE_INTERRUPTS  portCLEAR_INTERRUPT_MASK_FROM_ISR
 #else
