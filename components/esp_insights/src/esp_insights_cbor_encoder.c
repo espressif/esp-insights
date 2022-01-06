@@ -411,7 +411,7 @@ static void encode_data_pt(CborEncoder *map, const uint8_t *data)
             cbor_encode_uint(map, m_data->value.u);
             break;
         case ESP_DIAG_DATA_TYPE_FLOAT:
-            cbor_encode_double(map, m_data->value.d);
+            cbor_encode_float(map, m_data->value.f);
             break;
         case ESP_DIAG_DATA_TYPE_IPv4:
             cbor_encode_byte_string(map, (uint8_t *)&m_data->value.ipv4, sizeof(m_data->value.ipv4));
