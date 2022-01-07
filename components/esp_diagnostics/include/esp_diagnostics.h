@@ -169,7 +169,7 @@ typedef struct {
         bool b;          /*!< Value for boolean data type */
         int32_t i;       /*!< Value for integer data type */
         uint32_t u;      /*!< Value for unsigned integer data type */
-        double d;        /*!< Value for float data type */
+        float f;         /*!< Value for float data type */
         uint32_t ipv4;   /*!< Value for the IPv4 address */
         uint8_t mac[6];  /*!< Value for the MAC address */
     } value;
