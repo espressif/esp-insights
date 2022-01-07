@@ -18,6 +18,7 @@
 #include <esp_diagnostics_metrics.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
+#include "esp_diagnostics_internal.h"
 
 #define LOG_TAG            "wifi_metrics"
 #define METRICS_TAG        "wifi"
@@ -98,18 +99,21 @@ static void wifi_timer_cb(TimerHandle_t handle)
     s_priv_data.prev_rssi = rssi;
 }
 
-void esp_diag_wifi_metrics_dump(void)
+esp_err_t esp_diag_wifi_metrics_dump(void)
 {
     if (!s_priv_data.init) {
-        return;
+        ESP_LOGW(LOG_TAG, "Wi-Fi metrics not initialized");
+        return ESP_ERR_INVALID_STATE;
     }
     int32_t rssi = get_rssi();
     if (rssi != 1) {
         update_min_rssi(rssi);
-        esp_diag_metrics_add_int(KEY_RSSI, rssi);
+        RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_int(KEY_RSSI, rssi), ESP_LOG_WARN, LOG_TAG,
+                            "Failed to add Wi-Fi metrics key:" KEY_RSSI);
         s_priv_data.prev_rssi = rssi;
         ESP_LOGI(LOG_TAG, "%s:%d %s:%d", KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
+    return ESP_OK;
 }
 
 esp_err_t esp_diag_wifi_metrics_init(void)

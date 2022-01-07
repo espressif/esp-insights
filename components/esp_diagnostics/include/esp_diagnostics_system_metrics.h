@@ -51,8 +51,10 @@ void esp_diag_heap_metrics_reset_period(uint32_t period);
  * @brief Dumps the heap metrics and prints them to the console.
  *
  * This API collects and reports metrics value at any give point in time.
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
  */
-void esp_diag_heap_metrics_dump(void);
+esp_err_t esp_diag_heap_metrics_dump(void);
 
 #endif /* CONFIG_DIAG_ENABLE_HEAP_METRICS */
 
@@ -78,8 +80,10 @@ esp_err_t esp_diag_wifi_metrics_deinit(void);
  * @brief Dumps the wifi metrics and prints them to the console.
  *
  * This API can be used to collect wifi metrics at any given point in time.
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
  */
-void esp_diag_wifi_metrics_dump(void);
+esp_err_t esp_diag_wifi_metrics_dump(void);
 
 #endif /* CONFIG_DIAG_ENABLE_WIFI_METRICS */
 
