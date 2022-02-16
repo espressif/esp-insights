@@ -26,7 +26,7 @@
 #define PATH_WIFI_STATION  "Wi-Fi.Station"
 
 #define POLLING_INTERVAL        30   /* 30 seconds */
-#define SEC2TICKS(s)            ((s * 1000) / portTICK_RATE_MS)
+#define SEC2TICKS(s)            ((s * 1000) / portTICK_PERIOD_MS)
 /* start reporting minimum ever rssi when rssi reaches -50 dbm */
 #define WIFI_RSSI_THRESHOLD     -50
 
@@ -45,14 +45,14 @@ static void update_min_rssi(int32_t rssi)
     if (rssi < s_priv_data.min_rssi) {
         s_priv_data.min_rssi = rssi;
         esp_diag_metrics_add_int(KEY_MIN_RSSI, rssi);
-        ets_printf("Wi-Fi RSSI crossed threshold %d\n", rssi);
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+        ESP_LOGI(LOG_TAG, "Wi-Fi RSSI crossed threshold %d\n", rssi);
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
         esp_wifi_set_rssi_threshold(rssi);
 #endif
     }
 }
 
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
 
 static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, void *evt_data)
 {
@@ -69,7 +69,7 @@ static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_i
         }
     }
 }
-#endif /* ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3 */
+#endif /* ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)  */
 
 /* This function returns 1 on failure otherwise valid RSSI */
 static int32_t get_rssi(void)
@@ -117,7 +117,7 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     if (s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
     /* Register the event handler for wifi events */
     esp_err_t err = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt_handler, NULL);
     if (err != ESP_OK) {
@@ -149,7 +149,7 @@ esp_err_t esp_diag_wifi_metrics_deinit(void)
     if (!s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
     esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt_handler);
 #endif
     /* Try to delete timer with 10 ticks wait time */

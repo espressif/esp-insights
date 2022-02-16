@@ -70,7 +70,7 @@ static void smoke_test(void *arg)
         esp_diag_heap_metrics_dump();
         if (count % MAX_PTRS == 0) {
             allocating = !allocating;
-            ets_printf("Allocating:%s\n", allocating ? "true" : "false");
+            ESP_LOGI(TAG, "Allocating:%s\n", allocating ? "true" : "false");
         }
         if (allocating) {
             uint32_t size = 1024 * (esp_random() % 8);

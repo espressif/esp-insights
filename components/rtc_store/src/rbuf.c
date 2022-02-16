@@ -224,7 +224,7 @@ static void prvInitializeNewRingbuffer(size_t xBufferSize,
     pxNewRingbuffer->xGetCurMaxSize = prvGetCurMaxSizeByteBuf;
 
     xSemaphoreGive(rbGET_TX_SEM_HANDLE(pxNewRingbuffer));
-#if ESP_IDF_VERSION_MAJOR >= 5
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     portMUX_INITIALIZE(&pxNewRingbuffer->mux);
 #else
     vPortCPUInitializeMutex(&pxNewRingbuffer->mux);

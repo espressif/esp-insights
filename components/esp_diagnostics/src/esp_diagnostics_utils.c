@@ -26,12 +26,14 @@
 #include "esp_diagnostics_metrics.h"
 #include "esp_diagnostics_variables.h"
 
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
 #include <esp_rom_crc.h>
 #define ESP_CRC32_LE(crc, buf, len) esp_rom_crc32_le(crc, buf, len)
+#define TASK_GET_NAME(handle) pcTaskGetName(handle)
 #else
 #include <esp_crc.h>
 #define ESP_CRC32_LE(crc, buf, len) esp_crc32_le(crc, buf, len)
+#define TASK_GET_NAME(handle) pcTaskGetTaskName(handle)
 #endif
 
 #define TASK_SNAP_TAG       "task_snap"
@@ -44,17 +46,11 @@
 #define BT_DEPTH_FMT_8      BT_DEPTH_FMT_4 BT_DEPTH_FMT_4
 #define BT_DEPTH_FMT_16     BT_DEPTH_FMT_8 BT_DEPTH_FMT_8
 
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 3
-#define TASK_GET_NAME(handle) pcTaskGetName(handle)
-#else
-#define TASK_GET_NAME(handle) pcTaskGetTaskName(handle)
-#endif
-
-/* From esp-idf v5.0 onwards
+/* From esp-idf v4.4 onwards
  * - portENTER_CRITICAL_NESTED() and portEXIT_CRITICAL_NESTED() macros are deprecated
  * - freertos/task_snapshot.h has been removed from freertos/task.h
  */
-#if ESP_IDF_VERSION_MAJOR >= 5
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
 #include "freertos/task_snapshot.h"
 #define DISABLE_INTERRUPTS portSET_INTERRUPT_MASK_FROM_ISR
 #define ENABLE_INTERRUPTS  portCLEAR_INTERRUPT_MASK_FROM_ISR
@@ -63,6 +59,11 @@
 #define ENABLE_INTERRUPTS  portEXIT_CRITICAL_NESTED
 #endif
 
+/* ESP-IDF v5.0 moved esp_cpu_process_stack_pc() is moved to esp_cpu_utils.h
+ */
+#if (CONFIG_IDF_TARGET_ARCH_XTENSA && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0))
+#include <esp_cpu_utils.h>
+#endif
 
 esp_err_t esp_diag_device_info_get(esp_diag_device_info_t *device_info)
 {
