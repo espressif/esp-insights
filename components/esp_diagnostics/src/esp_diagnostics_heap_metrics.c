@@ -39,7 +39,7 @@
 #define TIME_WINDOW             (30 * 60)    /* 1800 seconds = 30 minutes */
 #define ITERATIONS_TO_REPORT    (TIME_WINDOW / POLLING_INTERVAL)
 
-#define SEC2TICKS(s)       ((s * 1000) / portTICK_RATE_MS)
+#define SEC2TICKS(s)       ((s * 1000) / portTICK_PERIOD_MS)
 
 typedef struct {
     uint32_t min;
@@ -64,7 +64,7 @@ typedef struct {
 
 static heap_diag_priv_data_t s_priv_data;
 
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 2
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
 static void alloc_failed_hook(size_t size, uint32_t caps, const char *func)
 {
     esp_diag_metrics_add_uint(KEY_ALLOC_FAIL, size);
@@ -200,7 +200,7 @@ esp_err_t esp_diag_heap_metrics_init(void)
     if (s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 2
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
     esp_err_t err = heap_caps_register_failed_alloc_callback(alloc_failed_hook);
     if (err != ESP_OK) {
         return err;
@@ -250,7 +250,7 @@ esp_err_t esp_diag_heap_metrics_deinit(void)
     if (xTimerDelete(s_priv_data.handle, 10) == pdFALSE) {
         ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
     }
-#if ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 2
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
     esp_diag_metrics_unregister(KEY_ALLOC_FAIL);
 #endif
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT

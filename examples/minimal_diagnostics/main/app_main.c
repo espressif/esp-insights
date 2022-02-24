@@ -29,7 +29,7 @@
 #define EXAMPLE_ESP_WIFI_SSID               CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS               CONFIG_ESP_WIFI_PASSWORD
 
-#define METRICS_DUMP_INTERVAL_TICKS         ((600 * 1000) / portTICK_RATE_MS)
+#define METRICS_DUMP_INTERVAL_TICKS         ((600 * 1000) / portTICK_PERIOD_MS)
 
 #ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_HTTPS
 extern const char insights_auth_key_start[] asm("_binary_insights_auth_key_txt_start");

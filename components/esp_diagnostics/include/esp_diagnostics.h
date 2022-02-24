@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+#include <stdbool.h>
 #include <esp_err.h>
 #include <esp_log.h>
 

@@ -16,10 +16,22 @@
 #include "string.h"
 #include "esp_log.h"
 #include "esp_diagnostics.h"
-#include "soc/cpu.h"
 #include "soc/soc_memory_layout.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+/* Onwards esp-idf v5.0 esp_cpu_process_stack_pc() is moved to
+ * components/xtensa/include/esp_cpu_utils.h
+ */
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    #if CONFIG_IDF_TARGET_ARCH_XTENSA
+        #include "esp_cpu_utils.h"
+    #else /* CONFIG_IDF_TARGET_ARCH_RISCV */
+        #define esp_cpu_process_stack_pc(x) (x)   // dummy definition to avoid compilation error
+    #endif
+#else // For esp-idf version <= v4.4
+    #include "soc/cpu.h"
+#endif
 
 #define IS_LOG_TYPE_ENABLED(type) (s_priv_data.init && (type & s_priv_data.enabled_log_type))
 

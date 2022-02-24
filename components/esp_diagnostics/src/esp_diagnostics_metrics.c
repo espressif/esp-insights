@@ -129,9 +129,9 @@ void esp_diag_metrics_meta_print_all(void)
     uint32_t i;
     const esp_diag_metrics_meta_t *meta = esp_diag_metrics_meta_get_all(&len);
     if (meta) {
-        ets_printf("Tag\tKey\tLabel\tPath\tData type\n");
+        ESP_LOGI(TAG, "Tag\tKey\tLabel\tPath\tData type\n");
         for (i = 0; i < len; i++) {
-            ets_printf("%s\t%s\t%s\t%s\t%d\n", meta[i].tag, meta[i].key, meta[i].label, meta[i].path, meta[i].type);
+            ESP_LOGI(TAG, "%s\t%s\t%s\t%s\t%d\n", meta[i].tag, meta[i].key, meta[i].label, meta[i].path, meta[i].type);
         }
     }
 }
