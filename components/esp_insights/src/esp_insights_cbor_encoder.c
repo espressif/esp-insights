@@ -368,6 +368,13 @@ static void encode_log_list(CborEncoder *map, esp_diag_log_type_t type,
  */
 void esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size)
 {
+    /* Logs are stored as array of esp_diag_log_data_t,
+     * validate that data size is multiple of esp_diag_log_data_t size.
+     */
+    if (size % sizeof(esp_diag_log_data_t) != 0) {
+        return;
+    }
+
     CborEncoder log_map;
     cbor_encode_text_stringz(&s_diag_data_map, "traces");
     cbor_encoder_create_map(&s_diag_data_map, &log_map, CborIndefiniteLength);
@@ -379,58 +386,68 @@ void esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size)
 
 #if (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 // {"n":<key>, "v": <value>, "t": <ts> }
-static void encode_str_data_pt(CborEncoder *map, const uint8_t *data)
+static void encode_str_data_pt(CborEncoder *array, const uint8_t *data)
 {
+    CborEncoder map;
+    cbor_encoder_create_map(array, &map, CborIndefiniteLength);
+
     esp_diag_str_data_pt_t *m_data = (esp_diag_str_data_pt_t *)data;
-    cbor_encode_text_stringz(map, "n");
-    cbor_encode_text_stringz(map, m_data->key);
-    cbor_encode_text_stringz(map, "v");
-    cbor_encode_text_stringz(map, m_data->value.str);
-    cbor_encode_text_stringz(map, "t");
-    cbor_encode_uint(map, m_data->ts);
+    cbor_encode_text_stringz(&map, "n");
+    cbor_encode_text_stringz(&map, m_data->key);
+    cbor_encode_text_stringz(&map, "v");
+    cbor_encode_text_stringz(&map, m_data->value.str);
+    cbor_encode_text_stringz(&map, "t");
+    cbor_encode_uint(&map, m_data->ts);
+
+    cbor_encoder_close_container(array, &map);
 }
 
-static void encode_data_pt(CborEncoder *map, const uint8_t *data)
+static void encode_data_pt(CborEncoder *array, const uint8_t *data)
 {
+    CborEncoder map;
+    cbor_encoder_create_map(array, &map, CborIndefiniteLength);
+
     esp_diag_data_pt_t *m_data = (esp_diag_data_pt_t *)data;
-    cbor_encode_text_stringz(map, "n");
-    cbor_encode_text_stringz(map, m_data->key);
-    cbor_encode_text_stringz(map, "v");
+    cbor_encode_text_stringz(&map, "n");
+    cbor_encode_text_stringz(&map, m_data->key);
+    cbor_encode_text_stringz(&map, "v");
     switch (m_data->data_type) {
         case ESP_DIAG_DATA_TYPE_BOOL:
-            cbor_encode_boolean(map, m_data->value.b);
+            cbor_encode_boolean(&map, m_data->value.b);
             break;
         case ESP_DIAG_DATA_TYPE_INT:
             if (m_data->value.i < 0) {
-                cbor_encode_negative_int(map, -(m_data->value.i));
+                cbor_encode_negative_int(&map, -(m_data->value.i));
             } else {
-                cbor_encode_int(map, m_data->value.i);
+                cbor_encode_int(&map, m_data->value.i);
             }
             break;
         case ESP_DIAG_DATA_TYPE_UINT:
-            cbor_encode_uint(map, m_data->value.u);
+            cbor_encode_uint(&map, m_data->value.u);
             break;
         case ESP_DIAG_DATA_TYPE_FLOAT:
-            cbor_encode_float(map, m_data->value.f);
+            cbor_encode_float(&map, m_data->value.f);
             break;
         case ESP_DIAG_DATA_TYPE_IPv4:
-            cbor_encode_byte_string(map, (uint8_t *)&m_data->value.ipv4, sizeof(m_data->value.ipv4));
+            cbor_encode_byte_string(&map, (uint8_t *)&m_data->value.ipv4, sizeof(m_data->value.ipv4));
             break;
         case ESP_DIAG_DATA_TYPE_MAC:
-            cbor_encode_byte_string(map, &m_data->value.mac[0], sizeof(m_data->value.mac));
+            cbor_encode_byte_string(&map, &m_data->value.mac[0], sizeof(m_data->value.mac));
             break;
         default:
             break;
     }
-    cbor_encode_text_stringz(map, "t");
-    cbor_encode_uint(map, m_data->ts);
+    cbor_encode_text_stringz(&map, "t");
+    cbor_encode_uint(&map, m_data->ts);
+
+    cbor_encoder_close_container(array, &map);
 }
 
 static void encode_data_points(const uint8_t *data, size_t size, const char *key, uint16_t type)
 {
     assert(key);
     size_t i = 0;
-    CborEncoder array, map;
+    CborEncoder array;
     rtc_store_non_critical_data_hdr_t header;
     esp_diag_data_type_t data_type;
 
@@ -446,14 +463,12 @@ static void encode_data_points(const uint8_t *data, size_t size, const char *key
             break;
         }
         if ((uint16_t)(data[i + sizeof(header)]) == type) {
-            cbor_encoder_create_map(&array, &map, CborIndefiniteLength);
             data_type = data[i + sizeof(header) + sizeof(uint16_t)];
-            if (data_type == ESP_DIAG_DATA_TYPE_STR) {
-                encode_str_data_pt(&map, data + i + sizeof(header));
-            } else {
-                encode_data_pt(&map, data + i + sizeof(header));
+            if (data_type == ESP_DIAG_DATA_TYPE_STR && header.len == sizeof(esp_diag_str_data_pt_t)) {
+                encode_str_data_pt(&array, data + i + sizeof(header));
+            } else if (header.len == sizeof(esp_diag_data_pt_t)) {
+                encode_data_pt(&array, data + i + sizeof(header));
             }
-            cbor_encoder_close_container(&array, &map);
         }
         size -= (sizeof(header) + header.len);
         i += (sizeof(header) + header.len);

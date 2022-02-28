@@ -118,7 +118,7 @@ typedef struct {
     uint32_t pc;                                        /*!< Program Counter */
     uint64_t timestamp;                                 /*!< If NTP sync enabled then POSIX time,
                                                              otherwise relative time since bootup in microseconds */
-    const char *tag;                                    /*!< Tag of log message */
+    char tag[16];                                       /*!< Tag of log message */
     void *msg_ptr;                                      /*!< Address of err/warn/event message in rodata */
     uint8_t msg_args[CONFIG_DIAG_LOG_MSG_ARG_MAX_SIZE]; /*!< Arguments of log message */
     uint8_t msg_args_len;                               /*!< Length of argument */
@@ -164,7 +164,7 @@ typedef struct {
 typedef struct {
     uint16_t type;       /*!< Metrics or Variable */
     uint16_t data_type;  /*!< Data type */
-    const char *key;     /*!< Key */
+    char key[16];        /*!< Key */
     uint64_t ts;         /*!< Timestamp */
     union {
         bool b;          /*!< Value for boolean data type */
@@ -182,7 +182,7 @@ typedef struct {
 typedef struct {
     uint16_t type;       /*!< Metrics or Variable */
     uint16_t data_type;  /*!< Data type */
-    const char *key;     /*!< Key */
+    char key[16];        /*!< Key */
     uint64_t ts;         /*!< Timestamp */
     union {
         char str[32];    /*!< Value for string data type */

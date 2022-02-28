@@ -321,13 +321,7 @@ static esp_err_t diag_log_add(esp_diag_log_type_t type, uint32_t pc, const char 
     log.pc = pc;
     va_copy(ap, args);
     log.timestamp = esp_diag_timestamp_get();
-
-    if (esp_ptr_in_drom(tag)) {
-        log.tag = tag;
-    } else {
-        log.tag = "";
-    }
-
+    strlcpy(log.tag, tag, sizeof(log.tag));
     log.msg_ptr = (void *)format;
     log.msg_args_len = sizeof(log.msg_args);
 #ifdef CONFIG_DIAG_LOG_MSG_ARG_FORMAT_TLV
