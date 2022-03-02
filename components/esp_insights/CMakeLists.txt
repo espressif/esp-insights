@@ -4,12 +4,14 @@ set(srcs "src/esp_insights.c"
         "src/esp_insights_client_data.c"
         "src/esp_insights_encoder.c"
         "src/esp_insights_cbor_encoder.c")
-set(priv_req esp_diagnostics cbor rmaker_common esptool_py espcoredump rtc_store nvs_flash)
+
+set(priv_req cbor rmaker_common esptool_py espcoredump rtc_store nvs_flash)
+set(pub_req esp_diagnostics)
 
 idf_component_register(SRCS ${srcs}
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "src"
-                       REQUIRES
+                       REQUIRES ${pub_req}
                        PRIV_REQUIRES ${priv_req})
 
 if(CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT)
