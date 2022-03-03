@@ -18,6 +18,7 @@
 #include <esp_diagnostics_metrics.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
+#include "esp_diagnostics_internal.h"
 
 #define LOG_TAG            "heap_metrics"
 #define METRICS_TAG        "heap"
@@ -168,18 +169,22 @@ static void heap_timer_cb(TimerHandle_t handle)
     }
 }
 
-void esp_diag_heap_metrics_dump(void)
+esp_err_t esp_diag_heap_metrics_dump(void)
 {
     if (!s_priv_data.init) {
-        return;
+        ESP_LOGW(LOG_TAG, "Heap metrics not initialized");
+        return ESP_ERR_INVALID_STATE;
     }
     uint32_t free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     uint32_t lfb = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
     uint32_t min_free_ever = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
 
-    esp_diag_metrics_add_uint(KEY_FREE, free);
-    esp_diag_metrics_add_uint(KEY_LFB, lfb);
-    esp_diag_metrics_add_uint(KEY_MIN_FREE, min_free_ever);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_FREE, free), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_FREE);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_LFB, lfb), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_LFB);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_MIN_FREE);
 
     ESP_LOGI(LOG_TAG, KEY_FREE ":0x%x " KEY_LFB ":0x%x " KEY_MIN_FREE ":0x%x", free, lfb, min_free_ever);
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
@@ -187,12 +192,16 @@ void esp_diag_heap_metrics_dump(void)
     lfb = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
     min_free_ever = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
 
-    esp_diag_metrics_add_uint(KEY_EXT_FREE, free);
-    esp_diag_metrics_add_uint(KEY_EXT_LFB, lfb);
-    esp_diag_metrics_add_uint(KEY_EXT_MIN_FREE, min_free_ever);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_EXT_FREE, free), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_EXT_FREE);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_EXT_LFB, lfb), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_EXT_LFB);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_EXT_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_EXT_MIN_FREE);
 
     ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%x " KEY_EXT_LFB ":0x%x " KEY_EXT_MIN_FREE ":0x%x", free, lfb, min_free_ever);
 #endif /* CONFIG_ESP32_SPIRAM_SUPPORT */
+    return ESP_OK;
 }
 
 esp_err_t esp_diag_heap_metrics_init(void)
