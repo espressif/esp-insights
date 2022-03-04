@@ -188,7 +188,7 @@ esp_err_t esp_diag_variable_add(esp_diag_data_type_t data_type,
     memset(&data, 0, sizeof(data));
     data.type = ESP_DIAG_DATA_PT_VARIABLE;
     data.data_type = data_type;
-    data.key = key;
+    strlcpy(data.key, key, sizeof(data.key));
     data.ts = ts;
     memcpy(&data.value, val, val_sz);
 
