@@ -20,7 +20,7 @@ endif()
 
 idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS "include"
-                    PRIV_REQUIRES freertos app_update)
+                    PRIV_REQUIRES freertos app_update esp_hw_support)
 
 set(WRAP_FUNCTIONS esp_log_write esp_log_writev)
 foreach(func ${WRAP_FUNCTIONS})
