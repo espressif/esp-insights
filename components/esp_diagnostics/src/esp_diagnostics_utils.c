@@ -25,6 +25,7 @@
 #include "esp_debug_helpers.h"
 #include "esp_diagnostics_metrics.h"
 #include "esp_diagnostics_variables.h"
+#include "esp_chip_info.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
 #include <esp_rom_crc.h>

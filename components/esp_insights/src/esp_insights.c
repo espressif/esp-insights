@@ -31,6 +31,11 @@
 #include "esp_insights_client_data.h"
 #include "esp_insights_encoder.h"
 
+#include <esp_idf_version.h>
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#include <esp_mac.h>
+#endif
+
 #define INSIGHTS_DEBUG_ENABLED      CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
 #define APP_ELF_SHA256_LEN          (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
 
