@@ -14,6 +14,7 @@
 #include <string.h>
 #include <esp_log.h>
 #include <esp_wifi.h>
+#include <esp_core_dump.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
 #include <freertos/semphr.h>
@@ -206,6 +207,9 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                     s_insights_data.data_sent = true;
                     s_insights_data.data_send_inprogress = false;
                     if (s_insights_data.boot_msg_id > 0 && s_insights_data.boot_msg_id == data->msg_id) {
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+                        esp_core_dump_image_erase();
+#endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
                         s_insights_data.boot_msg_id = 0;
                     }
 #if SEND_INSIGHTS_META
@@ -385,6 +389,9 @@ static void send_insights_data(void)
         rtc_store_critical_data_release(critical_data_size);
         s_insights_data.data_sent = true;
         if (s_insights_data.boot_msg_id == -1) {
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+            esp_core_dump_image_erase();
+#endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
             s_insights_data.boot_msg_id = 0;
         }
     }
