@@ -29,4 +29,12 @@ menu "RTC Store"
             RTC store has facility to post an event when buffer is filled to a configured level.
             This option configures the reporting watermark for critical and non critical data.
 
+    config RTC_STORE_OVERWRITE_NON_CRITICAL_DATA
+        bool "Overwrite non-critical data"
+        default n
+        help
+            Metrics and variables data is stored in non-critical buffer.
+            If this option is enabled, the oldest entry will be overwritten by the newest entry.
+            Enable this option if it is okay to drop the older entries.
+
 endmenu

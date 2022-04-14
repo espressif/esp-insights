@@ -139,7 +139,9 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
     xSemaphoreTake(s_priv_data.critical.lock, portMAX_DELAY);
     rbuf_get_info(s_priv_data.critical.ringbuf, NULL, NULL, &write_size, NULL, NULL);
     write_size = DIAG_CRITICAL_BUF_SIZE - write_size;
-    if ((rbuf_get_cur_free_size(s_priv_data.critical.ringbuf) > write_size) && (write_size < len)) {
+
+    // If total-free > len and free-at-end < len
+    if ((rbuf_get_cur_free_size(s_priv_data.critical.ringbuf) > len) && (write_size < len)) {
         rtc_store_records_align(write_size, &s_priv_data.critical);
     }
 
@@ -173,12 +175,15 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     rtc_store_non_critical_data_hdr_t header;
     size_t req_free = sizeof(header) + len;
     size_t write_size;
-    size_t receive_size;
+    size_t curr_free;
 
     if (xSemaphoreTake(s_priv_data.non_critical.lock, 0) == pdFALSE) {
         return ESP_FAIL;
     }
+
+#if CONFIG_RTC_STORE_OVERWRITE_NON_CRITICAL_DATA
     /* Make enough room for the item */
+    size_t receive_size;
     while (rbuf_get_cur_free_size(s_priv_data.non_critical.ringbuf) < req_free) {
         memcpy(&header, s_priv_data.non_critical.store->buf + s_priv_data.non_critical.store->read_offset, sizeof(header));
 
@@ -188,28 +193,46 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
             rtc_store_read_complete(receive_size, &s_priv_data.non_critical);
         }
     }
-    /* get the current write head */
+#else // This checks if we have enough space to write the item
+    curr_free = rbuf_get_cur_free_size(s_priv_data.non_critical.ringbuf);
+    if (curr_free < req_free) {
+        xSemaphoreGive(s_priv_data.non_critical.lock);
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
+        return ESP_ERR_NO_MEM;
+    }
+#endif
+
     rbuf_get_info(s_priv_data.non_critical.ringbuf, NULL, NULL, &write_size, NULL, NULL);
-    /* Room at the end of buffer */
     write_size = DIAG_NON_CRITICAL_BUF_SIZE - write_size;
-    if ((write_size < req_free)) {
+    // If total-free > len and free-at-end < len
+    if (write_size < req_free) {
         rtc_store_records_align(write_size, &s_priv_data.non_critical);
     }
 
-    /* write header */
     memset(&header, 0, sizeof(header));
     header.dg = dg;
     header.len = len;
-    rbuf_send(s_priv_data.non_critical.ringbuf, &header, sizeof(header), 0);
-    /* write data */
-    rbuf_send(s_priv_data.non_critical.ringbuf, data, len, 0);
-    /* update indices */
+
+    if (rbuf_send(s_priv_data.non_critical.ringbuf, &header, sizeof(header), 0) != pdTRUE) {
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL, &header, sizeof(header), 0);
+        xSemaphoreGive(s_priv_data.non_critical.lock);
+        return ESP_FAIL;
+    }
+
+    if (rbuf_send(s_priv_data.non_critical.ringbuf, data, len, 0) != pdTRUE) {
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL, data, len, 0);
+        xSemaphoreGive(s_priv_data.non_critical.lock);
+        return ESP_FAIL;
+    }
+
     rtc_store_write_complete(req_free, &s_priv_data.non_critical);
 
-    size_t curr_free = rbuf_get_cur_free_size(s_priv_data.non_critical.ringbuf);
+    // Post low memory event even if data overwrite is enabled.
+    curr_free = rbuf_get_cur_free_size(s_priv_data.non_critical.ringbuf);
     if (curr_free < DIAG_NON_CRITICAL_DATA_REPORTING_WATERMARK) {
         esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
     }
+
     xSemaphoreGive(s_priv_data.non_critical.lock);
     return ESP_OK;
 }
