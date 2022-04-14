@@ -25,6 +25,8 @@ extern "C" {
     }                                                                 \
 }
 
+#define SEC2TICKS(s) ((s * 1000) / portTICK_PERIOD_MS)
+
 #ifdef __cplusplus
 }
 #endif

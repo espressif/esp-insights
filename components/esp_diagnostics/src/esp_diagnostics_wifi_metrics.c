@@ -26,10 +26,9 @@
 #define KEY_MIN_RSSI       "min_rssi_ever"
 #define PATH_WIFI_STATION  "Wi-Fi.Station"
 
-#define POLLING_INTERVAL        30   /* 30 seconds */
-#define SEC2TICKS(s)            ((s * 1000) / portTICK_PERIOD_MS)
+#define DEFAULT_POLLING_INTERVAL 30   /* 30 seconds */
 /* start reporting minimum ever rssi when rssi reaches -50 dbm */
-#define WIFI_RSSI_THRESHOLD     -50
+#define WIFI_RSSI_THRESHOLD      -50
 
 typedef struct {
     bool init;
@@ -82,23 +81,6 @@ static int32_t get_rssi(void)
     return 1;
 }
 
-static void wifi_timer_cb(TimerHandle_t handle)
-{
-    if (!s_priv_data.init) {
-        return;
-    }
-    int32_t rssi = get_rssi();
-    if (rssi == 1) {
-        return;
-    }
-    update_min_rssi(rssi);
-    if ((rssi / CONFIG_DIAG_WIFI_RSSI_STEP_INTERVAL ) != (s_priv_data.prev_rssi / CONFIG_DIAG_WIFI_RSSI_STEP_INTERVAL)) {
-        esp_diag_metrics_add_int(KEY_RSSI, rssi);
-        esp_diag_metrics_add_int(KEY_MIN_RSSI, s_priv_data.min_rssi);
-    }
-    s_priv_data.prev_rssi = rssi;
-}
-
 esp_err_t esp_diag_wifi_metrics_dump(void)
 {
     if (!s_priv_data.init) {
@@ -110,10 +92,17 @@ esp_err_t esp_diag_wifi_metrics_dump(void)
         update_min_rssi(rssi);
         RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_int(KEY_RSSI, rssi), ESP_LOG_WARN, LOG_TAG,
                             "Failed to add Wi-Fi metrics key:" KEY_RSSI);
+        RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_int(KEY_MIN_RSSI, s_priv_data.min_rssi), ESP_LOG_WARN, LOG_TAG,
+                            "Failed to add Wi-Fi metrics key:" KEY_MIN_RSSI);
         s_priv_data.prev_rssi = rssi;
         ESP_LOGI(LOG_TAG, "%s:%d %s:%d", KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
     return ESP_OK;
+}
+
+static void wifi_timer_cb(TimerHandle_t handle)
+{
+    esp_diag_wifi_metrics_dump();
 }
 
 esp_err_t esp_diag_wifi_metrics_init(void)
@@ -136,8 +125,7 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     esp_diag_metrics_register(METRICS_TAG, KEY_MIN_RSSI, "Minimum ever Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
 
     s_priv_data.min_rssi = WIFI_RSSI_THRESHOLD;
-    s_priv_data.period = POLLING_INTERVAL;
-    s_priv_data.handle = xTimerCreate("wifi_metrics", SEC2TICKS(s_priv_data.period),
+    s_priv_data.handle = xTimerCreate("wifi_metrics", SEC2TICKS(DEFAULT_POLLING_INTERVAL),
                                       pdTRUE, NULL, wifi_timer_cb);
     if (s_priv_data.handle) {
         xTimerStart(s_priv_data.handle, 0);
@@ -164,4 +152,16 @@ esp_err_t esp_diag_wifi_metrics_deinit(void)
     esp_diag_metrics_unregister(KEY_MIN_RSSI);
     memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
+}
+
+void esp_diag_wifi_metrics_reset_interval(uint32_t period)
+{
+    if (!s_priv_data.init) {
+        return;
+    }
+    if (period == 0) {
+        xTimerStop(s_priv_data.handle, 0);
+        return;
+    }
+    xTimerChangePeriod(s_priv_data.handle, SEC2TICKS(period), 0);
 }
