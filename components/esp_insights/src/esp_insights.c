@@ -414,6 +414,12 @@ static void insights_periodic_handler(void *priv_data)
     send_insights_data();
 }
 
+esp_err_t esp_insights_send_data(void)
+{
+    ESP_LOGI(TAG, "Flushing data to cloud");
+    return esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
+}
+
 static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
                                     int32_t event_id, void* event_data)
 {

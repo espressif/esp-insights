@@ -153,6 +153,15 @@ esp_err_t esp_insights_transport_register(esp_insights_transport_config_t *confi
  */
 void esp_insights_transport_unregister(void);
 
+/**
+ * @brief Read insights data from buffers and send it to the cloud
+ *
+ * Call to this function is asynchronous, it may take some time to send the data.
+ *
+ * @return ESP_OK on success, appropriate error code otherwise
+ */
+esp_err_t esp_insights_send_data(void);
+
 #ifdef __cplusplus
 }
 #endif
