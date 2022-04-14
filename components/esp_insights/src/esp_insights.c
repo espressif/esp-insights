@@ -104,6 +104,13 @@ static void esp_insights_first_call(void *priv_data)
     xTimerStart(entry->timer, 0);
 }
 
+/* Returns ESP_OK if wifi is connected, error code otherwise */
+static esp_err_t is_wifi_connected(void)
+{
+    wifi_ap_record_t ap_info;
+    return esp_wifi_sta_get_ap_info(&ap_info);
+}
+
 /* This executes in the context of timer task.
  *
  * There is a dynamic logic to decide the next instance when the insights
@@ -125,7 +132,9 @@ static void esp_insights_common_cb(TimerHandle_t handle)
     xSemaphoreGive(s_insights_data.data_lock);
 
     if (entry) {
-        esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
+        if (is_wifi_connected() == ESP_OK) {
+            esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
+        }
         /* If data was sent during previous timer interval, double the period */
         if (l_data_sent) {
             entry->cur_seconds <<= 1; /* Double the period */
@@ -371,7 +380,7 @@ static void send_insights_data(void)
         goto data_send_end;
     }
 #if INSIGHTS_DEBUG_ENABLED
-    ESP_LOGI(TAG, "Sending data of length %d to the MQTT Insights topic:", len);
+    ESP_LOGI(TAG, "Sending data of length: %d", len);
     hex_dump(s_insights_data.scratch_buf, len);
 #endif
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
@@ -405,8 +414,7 @@ static void insights_periodic_handler(void *priv_data)
 {
     xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
     /* Return if wifi is disconnected */
-    wifi_ap_record_t ap_info;
-    if (esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK) {
+    if (is_wifi_connected() != ESP_OK) {
         s_insights_data.data_send_inprogress = false;
         xSemaphoreGive(s_insights_data.data_lock);
         return;
@@ -427,8 +435,13 @@ static void insights_periodic_handler(void *priv_data)
 
 esp_err_t esp_insights_send_data(void)
 {
-    ESP_LOGI(TAG, "Flushing data to cloud");
-    return esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
+    esp_err_t err = is_wifi_connected();
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Sending data to cloud");
+        return esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
+    }
+    ESP_LOGW(TAG, "Wi-Fi not in connected state");
+    return err;
 }
 
 static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
@@ -443,7 +456,9 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
 #if INSIGHTS_DEBUG_ENABLED
             ESP_LOGI(TAG, "RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM");
 #endif
-            esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
+            if (is_wifi_connected() == ESP_OK) {
+                esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
+            }
             break;
         }
         case RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
