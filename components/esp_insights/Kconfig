@@ -38,4 +38,22 @@ menu "ESP Insights"
         string "Insights https host"
         default "https://client.insights.espressif.com"
 
+    config ESP_INSIGHTS_CLOUD_POST_MIN_INTERVAL_SEC
+        int "Insights cloud post min interval (sec)"
+        default 60
+        help
+            Minimum interval between two consecutive cloud posts.
+            There is a dynamic logic to decide the next timeout when the insights data will be reported.
+            It depends on whether the data was sent or not during the previous timeout.
+            If the data was sent, the next timeout is doubled and if not, it is halved.
+
+    config ESP_INSIGHTS_CLOUD_POST_MAX_INTERVAL_SEC
+        int "Insights cloud post max interval (sec)"
+        default 240
+        help
+            Maximum interval between two consecutive cloud posts.
+            There is a dynamic logic to decide the next timeout when the insights data will be reported.
+            It depends on whether the data was sent or not during the previous timeout.
+            If the data was sent, the next timeout is doubled and if not, it is halved.
+
 endmenu

@@ -98,7 +98,6 @@ void esp_insights_encode_boottime_data(void)
         memset(summary, 0, sizeof(esp_core_dump_summary_t));
         if (esp_core_dump_get_summary(summary) == ESP_OK) {
             esp_insights_cbor_encode_diag_crash(summary);
-            esp_core_dump_image_erase();
         }
         free(summary);
     }
