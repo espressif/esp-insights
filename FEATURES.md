@@ -61,6 +61,26 @@ esp_diag_log_hook_enable(ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | E
 esp_diag_log_hook_disable(ESP_DIAG_LOG_TYPE_EVENT);
 ```
 
+#### Configure the log level for a specific tag
+Users can configure the log level to for a specific tag by using
+[`esp_log_level_set()`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/log.html#_CPPv417esp_log_level_setPKc15esp_log_level_t) API.
+
+Only logs with same and lower verbosity levels will be reported to cloud and shown on console.
+
+```
+/* This disables the errors, warnings, and events */
+esp_log_level_set(TAG, ESP_LOG_NONE);
+
+/* This enables errors, disable warnings and events */
+esp_log_level_set(TAG, ESP_LOG_ERROR);
+
+/* This enables errors and warnings, disables the events */
+esp_log_level_set(TAG, ESP_LOG_WARN);
+
+/* This enables errors, warning, and events */
+esp_log_level_set(TAG, ESP_LOG_INFO);
+```
+
 #### Insights with Logging disabled
 If _Default log verbosity_ is configured to _No output_ (Component config > Log output > Default log verbosity) then error and warning logs will not be visible on the dashboard.
 Because log level check is during the preprocessing phase, this removes all the ESP_LOGE and ESP_LOGW from the binary. It also removes the diagnostics log hook inside the logging macro.
