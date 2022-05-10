@@ -149,7 +149,6 @@ static void esp_insights_common_cb(TimerHandle_t handle)
             }
         }
         xTimerChangePeriod(handle, (entry->cur_seconds * 1000)/ portTICK_PERIOD_MS, 100);
-        ESP_LOGI(TAG, "Scheduling Insights timer for %d seconds.", entry->cur_seconds);
         xTimerStart(handle, 0);
     }
 }
@@ -305,29 +304,6 @@ static void send_insights_meta(void)
 }
 #endif /* SEND_INSIGHTS_META */
 
-static size_t encode_data(const void *critical_data, size_t critical_data_size,
-                          const void *non_critical_data, size_t non_critical_data_size,
-                          void *out_data, size_t out_data_size, bool encode_boot)
-{
-    if (!out_data || !out_data_size) {
-        return 0;
-    }
-    if (!encode_boot && !critical_data && !non_critical_data) {
-        return 0;
-    }
-    esp_insights_encode_data_begin(out_data, out_data_size, s_insights_data.app_sha256);
-    if (encode_boot) {
-        esp_insights_encode_boottime_data();
-    }
-    if (critical_data) {
-        esp_insights_encode_critical_data(critical_data, critical_data_size);
-    }
-    if (non_critical_data) {
-        esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
-    }
-    return esp_insights_encode_data_end(out_data);
-}
-
 /* Consider 100 bytes are published and received on cloud but RMAKER_MQTT_EVENT_PUBLISHED
  * event is not received for 100 bytes. In a mean time 50 bytes are added to the buffer.
  * When the next time timer expires then old 100 bytes plus new 50 bytes will be published
@@ -356,23 +332,48 @@ static void send_insights_data(void)
     }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-    critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
-    non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
-    len = encode_data(critical_data, critical_data_size,
-                      non_critical_data, non_critical_data_size,
-                      s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE,
-                      s_insights_data.boot_msg_id == -1);
-    if (critical_data) {
+    // If encoding first message
+    if (s_insights_data.boot_msg_id == -1) {
+        esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+
         /* If any ESP_LOGE, ESP_LOGW is added in between rtc_store_critical_data_read_and_lock()
          * and rtc_store_critical_data_release_and_unlock(), system will be deadlocked.
-         * Unlocking here as soon as possible.
+         * So, encode boottime data before acquiring the data store lock,
+         * Becuase, esp_insights_encode_boottime_data() calls esp_core_dump_image_check() which contain few error logs
          */
-        rtc_store_critical_data_release_and_unlock(0);
+        esp_insights_encode_boottime_data();
+
+        critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
+        if (critical_data) {
+            esp_insights_encode_critical_data(critical_data, critical_data_size);
+            rtc_store_critical_data_release_and_unlock(0);
+        }
+
+        non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
+        if (non_critical_data) {
+            esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
+            /* Remove all the non critical data after encoding */
+            rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
+        }
+        len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
+    } else {
+        critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
+        non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
+
+        if (critical_data || non_critical_data) {
+            esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+        }
+        if (critical_data) {
+            esp_insights_encode_critical_data(critical_data, critical_data_size);
+            rtc_store_critical_data_release_and_unlock(0);
+        }
+        if (non_critical_data) {
+            esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
+            rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
+        }
+        len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
     }
-    if (non_critical_data) {
-        /* Remove the non critical data after encoding */
-        rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
-    }
+
     if (len == 0) {
 #if INSIGHTS_DEBUG_ENABLED
         ESP_LOGI(TAG, "No data to send");
