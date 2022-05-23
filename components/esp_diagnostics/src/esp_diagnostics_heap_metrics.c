@@ -45,14 +45,6 @@ typedef struct {
 
 static heap_diag_priv_data_t s_priv_data;
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
-static void alloc_failed_hook(size_t size, uint32_t caps, const char *func)
-{
-    esp_diag_metrics_add_uint(KEY_ALLOC_FAIL, size);
-    ESP_DIAG_EVENT(METRICS_TAG, KEY_ALLOC_FAIL " size:0x%x func:%s", size, func);
-}
-#endif
-
 esp_err_t esp_diag_heap_metrics_dump(void)
 {
     if (!s_priv_data.init) {
@@ -92,6 +84,15 @@ static void heap_timer_cb(TimerHandle_t handle)
 {
     esp_diag_heap_metrics_dump();
 }
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
+static void alloc_failed_hook(size_t size, uint32_t caps, const char *func)
+{
+    esp_diag_heap_metrics_dump();
+    esp_diag_metrics_add_uint(KEY_ALLOC_FAIL, size);
+    ESP_DIAG_EVENT(METRICS_TAG, KEY_ALLOC_FAIL " size:0x%x func:%s", size, func);
+}
+#endif
 
 esp_err_t esp_diag_heap_metrics_init(void)
 {

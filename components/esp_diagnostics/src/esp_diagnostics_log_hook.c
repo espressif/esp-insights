@@ -342,21 +342,40 @@ static esp_err_t diag_log_add(esp_diag_log_type_t type, uint32_t pc, const char 
     return write_data(&log, sizeof(log));
 }
 
+/* If log level of a particular tag is set to less than ERROR
+ * using esp_log_level_set() then those logs are ignored
+ */
 static esp_err_t esp_diag_log_error(uint32_t pc, const char *tag, const char *format, va_list args)
 {
+    if (esp_log_level_get(tag) < ESP_LOG_ERROR) {
+        return ESP_FAIL;
+    }
     return diag_log_add(ESP_DIAG_LOG_TYPE_ERROR, pc, tag, format, args);
 }
 
+/* If log level of a particular tag is set to less than WARNING
+ * using esp_log_level_set() then those logs are ignored
+ */
 static esp_err_t esp_diag_log_warning(uint32_t pc, const char *tag, const char *format, va_list args)
 {
+    if (esp_log_level_get(tag) < ESP_LOG_WARN) {
+        return ESP_FAIL;
+    }
     return diag_log_add(ESP_DIAG_LOG_TYPE_WARNING, pc, tag, format, args);
 }
 
+/* If log level of a particular tag is set to less than INFO
+ * using esp_log_level_set() then those logs are ignored
+ */
 esp_err_t esp_diag_log_event(const char *tag, const char *format, ...)
 {
     esp_err_t err;
     va_list args;
     uint32_t pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
+
+    if (esp_log_level_get(tag) < ESP_LOG_INFO) {
+        return ESP_FAIL;
+    }
 
     va_start(args, format);
     err = diag_log_add(ESP_DIAG_LOG_TYPE_EVENT, pc, tag, format, args);
