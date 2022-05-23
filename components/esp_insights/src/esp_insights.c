@@ -453,21 +453,31 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
     }
     switch(event_id) {
         case RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM:
+        case RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM:
         {
 #if INSIGHTS_DEBUG_ENABLED
-            ESP_LOGI(TAG, "RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM");
+            ESP_LOGI(TAG, "RTC_STORE_EVENT_%sCRITICAL_DATA_LOW_MEM",
+                    event_id == RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM ? "" : "NON_");
 #endif
             if (is_wifi_connected() == ESP_OK) {
                 esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
             }
             break;
         }
+
         case RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
             s_insights_data.log_write_fail_cnt++;
 #if INSIGHTS_DEBUG_ENABLED
             ESP_LOGI(TAG, "Log write fail count: %d", s_insights_data.log_write_fail_cnt);
 #endif
             break;
+
+        case RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL:
+#if INSIGHTS_DEBUG_ENABLED
+            ESP_LOGI(TAG, "Non critical data write failed");
+#endif
+            break;
+
         default:
             break;
     }
