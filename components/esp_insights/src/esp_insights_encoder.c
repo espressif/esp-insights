@@ -93,13 +93,19 @@ void esp_insights_encode_boottime_data(void)
 
     /* encode core dump summary */
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
-    esp_core_dump_summary_t *summary = malloc(sizeof(esp_core_dump_summary_t));
-    if (summary) {
-        memset(summary, 0, sizeof(esp_core_dump_summary_t));
-        if (esp_core_dump_get_summary(summary) == ESP_OK) {
-            esp_insights_cbor_encode_diag_crash(summary);
+    const char *TAG = "Insights";
+    esp_err_t err = esp_core_dump_image_check();
+    if (err == ESP_OK) {
+        esp_core_dump_summary_t *summary = malloc(sizeof(esp_core_dump_summary_t));
+        if (summary) {
+            memset(summary, 0, sizeof(esp_core_dump_summary_t));
+            if (esp_core_dump_get_summary(summary) == ESP_OK) {
+                esp_insights_cbor_encode_diag_crash(summary);
+            }
+            free(summary);
         }
-        free(summary);
+    } else if (err == ESP_ERR_INVALID_CRC) {
+        ESP_LOGE(TAG, "Core dump stored in flash is corrupted");
     }
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 }
