@@ -17,6 +17,7 @@
 #include "esp_log.h"
 #include "esp_diagnostics.h"
 #include "soc/soc_memory_layout.h"
+#include "esp_idf_version.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -347,9 +348,11 @@ static esp_err_t diag_log_add(esp_diag_log_type_t type, uint32_t pc, const char 
  */
 static esp_err_t esp_diag_log_error(uint32_t pc, const char *tag, const char *format, va_list args)
 {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     if (esp_log_level_get(tag) < ESP_LOG_ERROR) {
         return ESP_FAIL;
     }
+#endif
     return diag_log_add(ESP_DIAG_LOG_TYPE_ERROR, pc, tag, format, args);
 }
 
@@ -358,9 +361,11 @@ static esp_err_t esp_diag_log_error(uint32_t pc, const char *tag, const char *fo
  */
 static esp_err_t esp_diag_log_warning(uint32_t pc, const char *tag, const char *format, va_list args)
 {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     if (esp_log_level_get(tag) < ESP_LOG_WARN) {
         return ESP_FAIL;
     }
+#endif
     return diag_log_add(ESP_DIAG_LOG_TYPE_WARNING, pc, tag, format, args);
 }
 
@@ -373,9 +378,11 @@ esp_err_t esp_diag_log_event(const char *tag, const char *format, ...)
     va_list args;
     uint32_t pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     if (esp_log_level_get(tag) < ESP_LOG_INFO) {
         return ESP_FAIL;
     }
+#endif
 
     va_start(args, format);
     err = diag_log_add(ESP_DIAG_LOG_TYPE_EVENT, pc, tag, format, args);
