@@ -24,6 +24,7 @@
 #include <esp_diagnostics_variables.h>
 #include <esp_diagnostics_system_metrics.h>
 #include <esp_diagnostics_network_variables.h>
+#include <esp_rmaker_utils.h>
 #include <esp_rmaker_factory.h>
 #include <esp_rmaker_work_queue.h>
 #include <esp_insights.h>
@@ -665,7 +666,11 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to set node id");
         goto enable_err;
     }
-    s_insights_data.scratch_buf = malloc(INSIGHTS_DATA_MAX_SIZE);
+    if (config->alloc_ext_ram) {
+        s_insights_data.scratch_buf = MEM_ALLOC_EXTRAM(INSIGHTS_DATA_MAX_SIZE);
+    } else {
+        s_insights_data.scratch_buf = malloc(INSIGHTS_DATA_MAX_SIZE);
+    }
     if (!s_insights_data.scratch_buf) {
         ESP_LOGE(TAG, "Failed to allocate memory for scratch buffer.");
         err = ESP_ERR_NO_MEM;

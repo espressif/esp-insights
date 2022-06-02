@@ -37,6 +37,8 @@ typedef struct {
     const char *node_id;
     /** Authentication key, valid only for https transport */
     const char *auth_key;
+    /** Try to allocate large buffers in External RAM */
+    bool alloc_ext_ram;
 } esp_insights_config_t;
 
 /**
