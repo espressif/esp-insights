@@ -90,4 +90,10 @@ menu "Diagnostics"
             For Wi-Fi: SSID, BSSID, channel, auth mode, connection status, disconnection reason.
             For IP: IPv4 address, netmask, and gateway of the device.
 
+    config DIAG_MORE_NETWORK_VARS
+        depends on DIAG_ENABLE_NETWORK_VARIABLES
+        bool "Enable More Advanced Network variables"
+        default n
+        help
+            Enable more advanced network variables
 endmenu
