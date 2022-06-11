@@ -178,6 +178,11 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
                                                         uint32_t min_seconds, uint32_t max_seconds,
                                                         void *priv_data)
 {
+    if (s_periodic_insights_entry) {
+        ESP_LOGD(TAG, "s_periodic_insights_entry already registered");
+        return ESP_OK;
+    }
+
     if (!work_fn || (min_seconds == 0) || (max_seconds == 0)) {
         return ESP_FAIL;
     }
