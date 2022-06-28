@@ -92,6 +92,7 @@ typedef struct {
 
 static const char *TAG = "esp_insights";
 static esp_insights_data_t s_insights_data;
+static esp_insights_entry_t *s_periodic_insights_entry;
 
 static void esp_insights_first_call(void *priv_data)
 {
@@ -154,33 +155,57 @@ static void esp_insights_common_cb(TimerHandle_t handle)
     }
 }
 
+static esp_err_t esp_insights_unregister_periodic_handler(void)
+{
+    if (s_periodic_insights_entry) {
+        if (s_periodic_insights_entry->timer) {
+            ESP_LOGI(TAG, "Deleting the periodic timer");
+            if (xTimerDelete(s_periodic_insights_entry->timer, 10) != pdPASS) {
+                ESP_LOGE(TAG, "Failed to delete the periodic timer");
+            }
+        }
+
+        if (s_periodic_insights_entry) {
+            free(s_periodic_insights_entry);
+            s_periodic_insights_entry = NULL;
+        }
+    }
+
+    return ESP_OK;
+}
+
 static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t work_fn,
                                                         uint32_t min_seconds, uint32_t max_seconds,
                                                         void *priv_data)
 {
+    if (s_periodic_insights_entry) {
+        ESP_LOGD(TAG, "s_periodic_insights_entry already registered");
+        return ESP_OK;
+    }
+
     if (!work_fn || (min_seconds == 0) || (max_seconds == 0)) {
         return ESP_FAIL;
     }
 
-    esp_insights_entry_t *insights_entry = calloc (1, sizeof(esp_insights_entry_t));
-    if (!insights_entry) {
+    s_periodic_insights_entry = calloc (1, sizeof(esp_insights_entry_t));
+    if (!s_periodic_insights_entry) {
         return ESP_FAIL;
     }
-    insights_entry->work_fn = work_fn;
-    insights_entry->priv_data = priv_data;
-    insights_entry->min_seconds = min_seconds;
-    insights_entry->max_seconds = max_seconds;
-    insights_entry->cur_seconds = min_seconds;
-    insights_entry->timer = xTimerCreate("test", (insights_entry->cur_seconds * 1000)/ portTICK_PERIOD_MS, pdFALSE, (void *)insights_entry, esp_insights_common_cb);
-    if (!insights_entry->timer) {
-        free(insights_entry);
+    s_periodic_insights_entry->work_fn = work_fn;
+    s_periodic_insights_entry->priv_data = priv_data;
+    s_periodic_insights_entry->min_seconds = min_seconds;
+    s_periodic_insights_entry->max_seconds = max_seconds;
+    s_periodic_insights_entry->cur_seconds = min_seconds;
+    s_periodic_insights_entry->timer = xTimerCreate("test", (s_periodic_insights_entry->cur_seconds * 1000)/ portTICK_PERIOD_MS, pdFALSE, (void *)s_periodic_insights_entry, esp_insights_common_cb);
+    if (!s_periodic_insights_entry->timer) {
+        free(s_periodic_insights_entry);
         return ESP_FAIL;
     }
     /* Rainmaker work queue execution start after MQTT connection is established,
      * esp_insights_first_call() will be executed after MQTT connection is established.
      * It add the work_fn to the queue and start the periodic timer.
      */
-    return esp_rmaker_work_queue_add_task(esp_insights_first_call, insights_entry);
+    return esp_rmaker_work_queue_add_task(esp_insights_first_call, s_periodic_insights_entry);
 }
 
 static void data_send_timeout_cb(TimerHandle_t handle)
@@ -571,7 +596,7 @@ static void variables_deinit(void)
 
 void esp_insights_disable(void)
 {
-    // TODO: implement esp_insights_unregister_periodic_handler();
+    esp_insights_unregister_periodic_handler();
 #ifdef CONFIG_DIAG_ENABLE_VARIABLES
     variables_deinit();
 #endif
@@ -605,6 +630,7 @@ void esp_insights_deinit(void)
     esp_insights_transport_disconnect();
     esp_insights_disable();
     esp_insights_transport_unregister();
+    esp_rmaker_work_queue_deinit();
 }
 
 /* Use the node id provided by user, if it is NULL and transport is set to MQTT then
