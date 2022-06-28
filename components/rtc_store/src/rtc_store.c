@@ -342,6 +342,16 @@ void rtc_store_deinit(void)
     s_priv_data.init = false;
 }
 
+static bool rtc_store_integrity_check(data_store_t *store)
+{
+    if (store->filled > store->size ||
+            store->read_offset > store->size ||
+            (store->read_offset + store->filled) > store->size) {
+        return false;
+    }
+    return true;
+}
+
 static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
                                      data_store_t *rtc_store,
                                      uint8_t *rtc_buf,
@@ -370,6 +380,12 @@ static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
     rbuf_data->store->buf = rtc_buf;
     rbuf_data->store->size = rtc_buf_size;
 
+    if (rtc_store_integrity_check(rtc_store) == false) {
+        // discard all the existing data
+        printf("%s: intergrity_check failed, discarding old data...\n", "rtc_store");
+        rtc_store->read_offset = 0;
+        rtc_store->filled = 0;
+    }
     return ESP_OK;
 }
 
