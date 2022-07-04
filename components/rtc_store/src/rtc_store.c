@@ -55,11 +55,16 @@
 
 ESP_EVENT_DEFINE_BASE(RTC_STORE_EVENT);
 
+// Assumption is RTC memory size will never exeed UINT16_MAX
+typedef struct {
+    uint16_t read_offset;
+    uint16_t filled;
+} data_store_info_t;
+
 typedef struct {
     uint8_t *buf;
     size_t size;
-    size_t read_offset;
-    size_t filled;
+    uint32_t info; /* to access, typecast this to data_store_info_t */
 } data_store_t;
 
 typedef struct {
@@ -94,48 +99,71 @@ static inline size_t data_store_get_size(data_store_t *store)
 
 static inline size_t data_store_get_free_at_end(data_store_t *store)
 {
-    return store->size - (store->filled + store->read_offset);
+    data_store_info_t *info = (data_store_info_t *) &store->info;
+    return store->size - (info->filled + info->read_offset);
 }
 
 static inline size_t data_store_get_free(data_store_t *store)
 {
-    return store->size - store->filled;
+    data_store_info_t *info = (data_store_info_t *) &store->info;
+    return store->size - info->filled;
 }
 
 static inline size_t data_store_get_filled(data_store_t *store)
 {
-    return store->filled;
+    data_store_info_t *info = (data_store_info_t *) &store->info;
+    return info->filled;
 }
 
 static void rtc_store_read_complete(rbuf_data_t *rbuf_data, size_t len)
 {
-    rbuf_data->store->filled -= len;
-    rbuf_data->store->read_offset += len;
+    uint32_t info = rbuf_data->store->info;
+
+    // modify new pointers
+    ((data_store_info_t *) &info)->filled -= len;
+    ((data_store_info_t *) &info)->read_offset += len;
+
+    // commit modifications
+    rbuf_data->store->info = info;
+}
+
+static void rtc_store_write_complete(rbuf_data_t *rbuf_data, size_t len)
+{
+    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
+    info->filled += len;
+}
+
+static void rtc_store_defrag_complete(rbuf_data_t *rbuf_data)
+{
+    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
+    info->read_offset = 0;
 }
 
 static void rtc_store_rbuf_defrag(rbuf_data_t *rbuf_data)
 {
     size_t filled = data_store_get_filled(rbuf_data->store);
+    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
     if (filled) {
-        void *__from = (void *) (rbuf_data->store->buf + rbuf_data->store->read_offset);
+        void *__from = (void *) (rbuf_data->store->buf + info->read_offset);
         void *__to = (void *) rbuf_data->store->buf;
         memmove(__to, __from, filled);
     }
-    /* reset the read offset */
-    rbuf_data->store->read_offset = 0;
+    rtc_store_defrag_complete(rbuf_data);
 }
 
 static size_t rtc_store_write(rbuf_data_t *rbuf_data, void *data, size_t len)
 {
+    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
 #if RTC_STORE_DBG_PRINTS
     printf("rb_info: size %d, available: %d, filled %d, read_ptr %d, to_write %d\n",
                 rbuf_data->store->size, data_store_get_free(rbuf_data->store),
-                data_store_get_filled(rbuf_data->store), rbuf_data->store->read_offset, len);
+                data_store_get_filled(rbuf_data->store), info->read_offset, len);
 #endif
 
-    void *write_ptr = (void *) (rbuf_data->store->buf + rbuf_data->store->filled + rbuf_data->store->read_offset);
+    void *write_ptr = (void *) (rbuf_data->store->buf + info->filled + info->read_offset);
     memcpy(write_ptr, data, len);
-    rbuf_data->store->filled += len;
+
+    rtc_store_write_complete(rbuf_data, len);
     return len;
 }
 
@@ -211,9 +239,10 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     }
 
 #if CONFIG_RTC_STORE_OVERWRITE_NON_CRITICAL_DATA
+    data_store_info_t *info = (data_store_info_t *) &s_priv_data.non_critical.store->info;
     /* Make enough room for the item */
     while (data_store_get_free(s_priv_data.non_critical.store) < req_free) {
-        uint8_t *read_ptr = s_priv_data.non_critical.store->buf + s_priv_data.non_critical.store->read_offset;
+        uint8_t *read_ptr = s_priv_data.non_critical.store->buf + info->read_offset;
         memcpy(&header, read_ptr, sizeof(header));
         rtc_store_read_complete(s_priv_data.non_critical, sizeof(header) + header.len);
     }
@@ -262,14 +291,14 @@ static const void *rtc_store_data_read_and_lock(rbuf_data_t *rbuf_data, size_t *
         return NULL;
     }
     xSemaphoreTake(rbuf_data->lock, portMAX_DELAY);
-
-    *size = rbuf_data->store->filled;
-    if (rbuf_data->store->read_offset + rbuf_data->store->filled > rbuf_data->store->size) {
+    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
+    *size = info->filled;
+    if (info->read_offset + info->filled > rbuf_data->store->size) {
         /* data is wrapped! note: this case doesn't happen, as we keep aligning data to start */
-        *size = rbuf_data->store->size - rbuf_data->store->read_offset;
+        *size = rbuf_data->store->size - info->read_offset;
     }
     if (*size) {
-        return (rbuf_data->store->buf + rbuf_data->store->read_offset);
+        return (rbuf_data->store->buf + info->read_offset);
     }
     xSemaphoreGive(rbuf_data->lock);
     return NULL;
@@ -344,9 +373,10 @@ void rtc_store_deinit(void)
 
 static bool rtc_store_integrity_check(data_store_t *store)
 {
-    if (store->filled > store->size ||
-            store->read_offset > store->size ||
-            (store->read_offset + store->filled) > store->size) {
+    data_store_info_t *info = (data_store_info_t *) &store->info;
+    if (info->filled > store->size ||
+            info->read_offset > store->size ||
+            (info->read_offset + info->filled) > store->size) {
         return false;
     }
     return true;
@@ -383,8 +413,7 @@ static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
     if (rtc_store_integrity_check(rtc_store) == false) {
         // discard all the existing data
         printf("%s: intergrity_check failed, discarding old data...\n", "rtc_store");
-        rtc_store->read_offset = 0;
-        rtc_store->filled = 0;
+        rtc_store->info = 0;
     }
     return ESP_OK;
 }
