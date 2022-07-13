@@ -71,15 +71,36 @@ typedef struct {
 } data_store_t;
 
 typedef struct {
-    SemaphoreHandle_t lock;
-    data_store_t *store;
+    SemaphoreHandle_t lock;     // critical lock
+    data_store_t *store;        // pointer to rtc data store
+    size_t wrap_cnt;            // keep track of no. of times wrapping happened
 } rbuf_data_t;
 
 typedef struct {
     bool init;
     rbuf_data_t critical;
     rbuf_data_t non_critical;
+
 } rtc_store_priv_data_t;
+
+#define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
+
+/**
+ * @brief header record to identify firmware/boot data a record represent
+ */
+typedef struct {
+    // uint32_t magic;             // magic, identifies master hdr
+    uint8_t gen_id;             // generated on each hard reset
+    uint8_t boot_cnt;           // updated on each soft reboot
+    char sha_sum[SHA_SIZE];     // elf shasum
+    bool valid;                 //
+} rtc_store_meta_header_t;
+
+// have a strategy to invalidate data beyond this
+//
+#define RTC_STORE_MAX_META_RECORDS  (10) // Have 5 master records at max
+
+// each data record must have an identifier to point a meta
 
 typedef struct {
     struct {
@@ -90,6 +111,7 @@ typedef struct {
         data_store_t store;
         uint8_t buf[DIAG_NON_CRITICAL_BUF_SIZE];
     } non_critical;
+    rtc_store_meta_header_t meta[RTC_STORE_MAX_META_RECORDS];
 } rtc_store_t;
 
 static rtc_store_priv_data_t s_priv_data;
@@ -127,6 +149,11 @@ static void rtc_store_read_complete(rbuf_data_t *rbuf_data, size_t len)
     info.filled -= len;
     info.read_offset += len;
 
+    if (((data_store_info_t *) &info)->read_offset > rbuf_data->store->size) {
+        ((data_store_info_t *) &info)->read_offset -= rbuf_data->store->size;
+        rbuf_data->wrap_cnt++; // wrap around count
+    }
+
     // commit modifications
     rbuf_data->store->info.value = info.value;
 }
@@ -135,24 +162,6 @@ static void rtc_store_write_complete(rbuf_data_t *rbuf_data, size_t len)
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
     info->filled += len;
-}
-
-static void rtc_store_defrag_complete(rbuf_data_t *rbuf_data)
-{
-    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-    info->read_offset = 0;
-}
-
-static void rtc_store_rbuf_defrag(rbuf_data_t *rbuf_data)
-{
-    size_t filled = data_store_get_filled(rbuf_data->store);
-    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-    if (filled) {
-        void *__from = (void *) (rbuf_data->store->buf + info->read_offset);
-        void *__to = (void *) rbuf_data->store->buf;
-        memmove(__to, __from, filled);
-    }
-    rtc_store_defrag_complete(rbuf_data);
 }
 
 static size_t rtc_store_write(rbuf_data_t *rbuf_data, void *data, size_t len)
@@ -164,8 +173,20 @@ static size_t rtc_store_write(rbuf_data_t *rbuf_data, void *data, size_t len)
                 data_store_get_filled(rbuf_data->store), info->read_offset, len);
 #endif
 
-    void *write_ptr = (void *) (rbuf_data->store->buf + info->filled + info->read_offset);
-    memcpy(write_ptr, data, len);
+    uint16_t write_offset = info->filled + info->read_offset;
+    if (write_offset > rbuf_data->store->size) { // wrap around
+        write_offset -= rbuf_data->store->size;
+    }
+
+
+    void *write_ptr = (void *) (rbuf_data->store->buf + write_offset);
+    size_t free_at_end = data_store_get_free_at_end(rbuf_data->store);
+    if (free_at_end < len) {
+        memcpy(write_ptr, data, free_at_end);
+        memcpy(rbuf_data->store->buf, data + free_at_end, len - free_at_end);
+    } else {
+        memcpy(write_ptr, data, len);
+    }
 
     rtc_store_write_complete(rbuf_data, len);
     return len;
@@ -194,14 +215,8 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
     // If no space available... Raise write fail event
     if (curr_free < len) {
         esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL, data, len, 0);
+        printf("%s, curr_free %d, req_free %d\n", "rtc_store", curr_free, len);
         ret = ESP_ERR_NO_MEM;
-    } else if ((curr_free >= len) && (free_at_end < len)) {
-        // If total-free > len and free-at-end < len
-#if RTC_STORE_DBG_PRINTS
-        printf("rtc_store: defragmenting critical...\n");
-#endif
-        rtc_store_rbuf_defrag(&s_priv_data.critical);
-        rtc_store_write(&s_priv_data.critical, data, len);
     } else { // we have enough space
         rtc_store_write(&s_priv_data.critical, data, len);
     }
@@ -253,20 +268,12 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
 #else // just check if we have enough space to write the item
     curr_free = data_store_get_free(s_priv_data.non_critical.store);
     if (curr_free < req_free) {
+        printf("%s, curr_free %d, req_free %d\n", "rtc_store", curr_free, req_free);
         xSemaphoreGive(s_priv_data.non_critical.lock);
         esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
         return ESP_ERR_NO_MEM;
     }
 #endif
-
-    // If total-free > len and free-at-end < len
-    if ((data_store_get_free(s_priv_data.non_critical.store) >= req_free) &&
-            (data_store_get_free_at_end(s_priv_data.non_critical.store) < req_free)) {
-#if RTC_STORE_DBG_PRINTS
-        printf("rtc_store: defragmenting non_critical...\n");
-#endif
-        rtc_store_rbuf_defrag(&s_priv_data.non_critical);
-    }
 
     memset(&header, 0, sizeof(header));
     header.dg = dg;
@@ -286,36 +293,32 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     return ESP_OK;
 }
 
-static const void *rtc_store_data_read_and_lock(rbuf_data_t *rbuf_data, size_t *size)
+static int rtc_store_data_read(rbuf_data_t *rbuf_data, uint8_t *buf, size_t size)
 {
     if (!size) {
-        return NULL;
+        return -1;
     }
     if (!s_priv_data.init) {
-        return NULL;
+        return -1;
     }
+
     xSemaphoreTake(rbuf_data->lock, portMAX_DELAY);
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-    *size = info->filled;
-    if (info->read_offset + info->filled > rbuf_data->store->size) {
-        /* data is wrapped! note: this case doesn't happen, as we keep aligning data to start */
-        *size = rbuf_data->store->size - info->read_offset;
-    }
-    if (*size) {
-        return (rbuf_data->store->buf + info->read_offset);
-    }
-    xSemaphoreGive(rbuf_data->lock);
-    return NULL;
-}
 
-static esp_err_t rtc_store_data_release_and_unlock(rbuf_data_t *rbuf_data, size_t size)
-{
-    if (!s_priv_data.init) {
-        return ESP_ERR_INVALID_STATE;
+    if (info->filled < size) {
+        size = info->filled;
     }
-    rtc_store_read_complete(rbuf_data, size);
+    int free_at_end = data_store_get_free_at_end(rbuf_data->store);
+    if (free_at_end < size) {
+        // data is wrapped, read data in 2 parts
+        memcpy(buf, rbuf_data->store->buf + info->read_offset, free_at_end);
+        memcpy(buf + free_at_end, rbuf_data->store->buf, size - free_at_end);
+    } else {
+        // single memcpy
+        memcpy(buf, rbuf_data->store->buf + info->read_offset, size);
+    }
     xSemaphoreGive(rbuf_data->lock);
-    return ESP_OK;
+    return size;
 }
 
 static esp_err_t rtc_store_data_release(rbuf_data_t *rbuf_data, size_t size)
@@ -323,31 +326,38 @@ static esp_err_t rtc_store_data_release(rbuf_data_t *rbuf_data, size_t size)
     if (!s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-    size_t data_size;
-    if (rtc_store_data_read_and_lock(rbuf_data, &data_size)) {
-        rtc_store_data_release_and_unlock(rbuf_data, size);
-    }
+    xSemaphoreTake(rbuf_data->lock, portMAX_DELAY);
+    rtc_store_read_complete(rbuf_data, size);
+    xSemaphoreGive(rbuf_data->lock);
     return ESP_OK;
 }
 
-const void *rtc_store_critical_data_read_and_lock(size_t *size)
+int rtc_store_critical_data_read(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_read_and_lock(&s_priv_data.critical, size);
+    return rtc_store_data_read(&s_priv_data.critical, buf, size);
 }
 
-const void *rtc_store_non_critical_data_read_and_lock(size_t *size)
+int rtc_store_critical_data_read_and_release(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_read_and_lock(&s_priv_data.non_critical, size);
+    int data_read = rtc_store_data_read(&s_priv_data.critical, buf, size);
+    if (data_read > 0) {
+        rtc_store_data_release(&s_priv_data.critical, size);
+    }
+    return data_read;
 }
 
-esp_err_t rtc_store_critical_data_release_and_unlock(size_t size)
+int rtc_store_non_critical_data_read(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_release_and_unlock(&s_priv_data.critical, size);
+    return rtc_store_data_read(&s_priv_data.non_critical, buf, size);
 }
 
-esp_err_t rtc_store_non_critical_data_release_and_unlock(size_t size)
+int rtc_store_non_critical_data_read_and_release(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_release_and_unlock(&s_priv_data.non_critical, size);
+    int data_read = rtc_store_data_read(&s_priv_data.non_critical, buf, size);
+    if (data_read > 0) {
+        rtc_store_data_release(&s_priv_data.non_critical, data_read);
+    }
+    return data_read;
 }
 
 esp_err_t rtc_store_critical_data_release(size_t size)

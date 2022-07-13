@@ -26,6 +26,9 @@
 #define NVS_KEY_B1_CHARS "b1_chars"
 #define NVS_KEY_B2_CHARS "b2_chars"
 
+#define READ_DATA_SIZE  CONFIG_RTC_STORE_DATA_SIZE
+static uint8_t data[READ_DATA_SIZE];
+
 typedef struct {
     uint16_t alphabet;  /* Store the ascii of the character which is stored in buf */
     uint16_t len;       /* Length of buf */
@@ -107,7 +110,6 @@ TEST_CASE("data store write", "[data-store]")
 
 TEST_CASE("data store write read release_all", "[data-store]")
 {
-    const void *data = NULL;
     size_t len = 0;
     uint32_t count = 10;
     char char_list[count];
@@ -120,17 +122,17 @@ TEST_CASE("data store write read release_all", "[data-store]")
     write_random_critical_data(count, char_list);
 
     /* Read critical data and validate */
-    data = rtc_store_critical_data_read_and_lock(&len);
-    TEST_ASSERT((data != NULL) && (len == (count * sizeof(test_data_t) + s_sha_off)));
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((len == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
 
     /* Release all the data */
-    TEST_ASSERT(rtc_store_critical_data_release_and_unlock(len) == ESP_OK);
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
     /* Read again, should return NULL and zero length */
-    data = NULL; len = 0;
-    data = rtc_store_critical_data_read_and_lock(&len);
-    TEST_ASSERT((data == NULL) && (len == 0));
+    len = 0;
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((len == 0));
 
     /* Data store deinit */
     rtc_store_deinit();
@@ -139,7 +141,6 @@ TEST_CASE("data store write read release_all", "[data-store]")
 
 TEST_CASE("data store write read release_zero read release_zero release_all", "[data-store]")
 {
-    const void *data = NULL;
     size_t len = 0;
     uint32_t count = 15;
     char char_list[count];
@@ -152,21 +153,15 @@ TEST_CASE("data store write read release_zero read release_zero release_all", "[
     write_random_critical_data(count, char_list);
 
     /* Read critical data and validate */
-    data = rtc_store_critical_data_read_and_lock(&len);
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
     TEST_ASSERT((data != NULL) && (len == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
-
-    /* Release zero data */
-    TEST_ASSERT(rtc_store_critical_data_release_and_unlock(0) == ESP_OK);
 
     /* Read critical data and validate again */
-    data = NULL; len = 0;
-    data = rtc_store_critical_data_read_and_lock(&len);
+    len = 0;
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
     TEST_ASSERT((data != NULL) && (len == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
-
-    /* Release zero data again */
-    TEST_ASSERT(rtc_store_critical_data_release_and_unlock(0) == ESP_OK);
 
     vTaskDelay(2000 / portTICK_PERIOD_MS);
 
@@ -233,7 +228,6 @@ static void read_critical_data(uint32_t bank)
 {
     size_t count = 0;
     char *char_list = NULL;
-    const char *data = NULL;
     size_t len = 0;
 
     /* diag data store init */
@@ -245,13 +239,13 @@ static void read_critical_data(uint32_t bank)
     TEST_ASSERT(char_list != NULL && count != 0);
 
     /* read data and validate */
-    data = rtc_store_critical_data_read_and_lock(&len);
-    TEST_ASSERT((data != NULL) && (len == (count * sizeof(test_data_t) + s_sha_off)));
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((len == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
     free(char_list);
 
     /* Release all data */
-    TEST_ASSERT(rtc_store_critical_data_release_and_unlock(len) == ESP_OK);
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
     /* diag data store deinit */
     rtc_store_deinit();
@@ -285,7 +279,6 @@ static void write_critical_data_in_b1_b2_and_reset(void)
     uint32_t count_2 = 11;
     char char_list_1[count_1];
     char char_list_2[count_2];
-    const void *data = NULL;
     size_t len = 0;
 
     /* diag data store init */
@@ -297,10 +290,9 @@ static void write_critical_data_in_b1_b2_and_reset(void)
     nvs_write_chars(char_list_1, count_1, 1);
 
     /* Read data, validate and release zero bytes */
-    data = rtc_store_critical_data_read_and_lock(&len);
-    TEST_ASSERT((data != NULL) && (len == (count_1 * sizeof(test_data_t) + s_sha_off)));
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((len == (count_1 * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count_1, char_list_1);
-    TEST_ASSERT(rtc_store_store_critical_data_release_and_unlock(0) == ESP_OK);
 
     /* Write critical data records to bank 2 */
     write_random_critical_data(count_2, char_list_2);
@@ -320,7 +312,6 @@ static void read_stale_critical_data_in_b1_b2(void)
     size_t count_2 = 0;
     char *char_list_1 = NULL;
     char *char_list_2 = NULL;
-    const char *data = NULL;
     size_t len = 0;
 
     /* diag data store init */
@@ -332,22 +323,22 @@ static void read_stale_critical_data_in_b1_b2(void)
     TEST_ASSERT(char_list_1 != NULL && count_1 != 0);
 
     /* read data from bank_1 and validate and release all */
-    data = rtc_store_critical_data_read_and_lock(&len);
-    TEST_ASSERT((data != NULL) && (len == (count_1 * sizeof(test_data_t) + s_sha_off)));
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((len == (count_1 * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count_1, char_list_1);
     free(char_list_1);
-    TEST_ASSERT(rtc_store_critical_data_release_and_unlock(len) == ESP_OK);
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
     /* read saved char list for bank_2 from nvs */
     char_list_2 = nvs_read_chars(&count_2, 2);
     TEST_ASSERT(char_list_2 != NULL && count_2 != 0);
 
     /* read data from bank_1 and validate and release all */
-    data = rtc_store_critical_data_read_and_lock(&len);
-    TEST_ASSERT((data != NULL) && (len == (count_2 * sizeof(test_data_t) + s_sha_off)));
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((len == (count_2 * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count_2, char_list_1);
     free(char_list_2);
-    TEST_ASSERT(rtc_store_critical_data_release_and_unlock(len) == ESP_OK);
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
     /* diag data store deinit */
     rtc_store_deinit();
