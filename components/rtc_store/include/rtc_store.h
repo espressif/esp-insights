@@ -36,6 +36,26 @@ typedef enum {
     RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL, /*!< Non critical data write failed */
 } rtc_store_event_t;
 
+#define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
+
+/**
+ * @brief header record to identify firmware/boot data a record represent
+ */
+typedef struct {
+    uint8_t gen_id;             // generated on each hard reset
+    uint8_t boot_cnt;           // updated on each soft reboot
+    char sha_sum[SHA_SIZE];     // elf shasum
+    bool valid;                 //
+} rtc_store_meta_header_t;
+
+/**
+ * @brief   get meta header for idx
+ *
+ * @param idx   idx of meta from records
+ * @return rtc_store_meta_header_t*
+ */
+rtc_store_meta_header_t *rtc_store_get_meta_record_by_index(uint8_t idx);
+
 /**
  * @brief Non critical data header
  */
