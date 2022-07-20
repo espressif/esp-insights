@@ -55,17 +55,19 @@ static void write_random_critical_data(uint32_t records, char *char_list)
     static uint32_t s_sha_off = 0;
 #endif
 
-static void validate_critical_data(const void*data, size_t len,
+static void validate_critical_data(const void *data, size_t len,
                                    uint32_t records, const char *char_list)
 {
     uint32_t i, j;
-    test_data_t *read_data = (test_data_t *)data;
+    test_data_t _read_data;
     for (i = 0; i < records; i++) {
-        test_data_t *_data = read_data + i;
-        TEST_ASSERT(_data->alphabet == char_list[i]);
-        for (j = 0; j < sizeof(_data->buf); j++) {
-            TEST_ASSERT(_data->buf[j] == char_list[i]);
+        data++; // skip meta_idx byte
+        memcpy(&_read_data, data, sizeof(_read_data));
+        TEST_ASSERT(_read_data.alphabet == char_list[i]);
+        for (j = 0; j < sizeof(_read_data.buf); j++) {
+            TEST_ASSERT(_read_data.buf[j] == char_list[i]);
         }
+        data += sizeof(test_data_t);
     }
 }
 
@@ -123,7 +125,7 @@ TEST_CASE("data store write read release_all", "[data-store]")
 
     /* Read critical data and validate */
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((len == (count * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT(((len - count) == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
 
     /* Release all the data */
@@ -135,6 +137,52 @@ TEST_CASE("data store write read release_all", "[data-store]")
     TEST_ASSERT((len == 0));
 
     /* Data store deinit */
+    rtc_store_deinit();
+    nvs_flash_deinit();
+}
+
+TEST_CASE("data store wrapped_read write_till_exact_full", "[data-store]")
+{
+    size_t len = 0;
+    uint32_t count = 15;
+    char char_list[count];
+
+    /* diag data store init */
+    init_nvs_flash();
+    assert(rtc_store_init() == ESP_OK);
+
+    // fill the buffer completely
+    memset(data, 0, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE);
+    rtc_store_critical_data_write(data, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE - 1);
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    // actual data written was 1 byte more than length provided
+    TEST_ASSERT((len == CONFIG_RTC_STORE_CRITICAL_DATA_SIZE));
+    /* Release all data */
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
+
+    // fill half the buffer, (this also makes sure if we are cool with prev edge case)
+    memset(data, 0, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE);
+    rtc_store_critical_data_write(data, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE - 4);
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    // actual data written was 1 byte more than length provided
+    TEST_ASSERT((len == CONFIG_RTC_STORE_CRITICAL_DATA_SIZE - 4 + 1));
+    /* Release all data */
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
+
+    /* Write critical data: wrap-around read test */
+    write_random_critical_data(count, char_list);
+
+    /* Read critical data and validate */
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT((data != NULL) && ((len - count) == (count * sizeof(test_data_t) + s_sha_off)));
+    validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    /* Release all data */
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
+
+    /* data store deinit */
     rtc_store_deinit();
     nvs_flash_deinit();
 }
@@ -154,13 +202,13 @@ TEST_CASE("data store write read release_zero read release_zero release_all", "[
 
     /* Read critical data and validate */
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((data != NULL) && (len == (count * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT((data != NULL) && ((len - count) == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
 
     /* Read critical data and validate again */
     len = 0;
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((data != NULL) && (len == (count * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT((data != NULL) && ((len - count) == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
 
     vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -240,7 +288,7 @@ static void read_critical_data(uint32_t bank)
 
     /* read data and validate */
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((len == (count * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT(((len - count) == (count * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count, char_list);
     free(char_list);
 
@@ -291,7 +339,7 @@ static void write_critical_data_in_b1_b2_and_reset(void)
 
     /* Read data, validate and release zero bytes */
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((len == (count_1 * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT(((len + count_1) == (count_1 * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count_1, char_list_1);
 
     /* Write critical data records to bank 2 */
@@ -324,7 +372,7 @@ static void read_stale_critical_data_in_b1_b2(void)
 
     /* read data from bank_1 and validate and release all */
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((len == (count_1 * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT(((len + count_1) == (count_1 * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count_1, char_list_1);
     free(char_list_1);
     TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
@@ -335,7 +383,7 @@ static void read_stale_critical_data_in_b1_b2(void)
 
     /* read data from bank_1 and validate and release all */
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
-    TEST_ASSERT((len == (count_2 * sizeof(test_data_t) + s_sha_off)));
+    TEST_ASSERT(((len + count_2) == (count_2 * sizeof(test_data_t) + s_sha_off)));
     validate_critical_data(data + s_sha_off, len - s_sha_off, count_2, char_list_1);
     free(char_list_2);
     TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
