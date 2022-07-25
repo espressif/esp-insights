@@ -114,12 +114,14 @@ size_t esp_insights_encode_critical_data(const void *data, size_t data_size)
 {
     size_t consumed = 0;
     if (data) {
-        uint8_t meta_idx = ((uint8_t *) data)[0];
-        const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_by_index(meta_idx);
-        if (hdr) {
-            esp_insights_cbor_encode_meta_hdr(hdr, "meta_c");
-        }
         consumed = esp_insights_cbor_encode_diag_logs(data, data_size);
+        if (consumed) {
+            uint8_t meta_idx = ((uint8_t *) data)[0];
+            const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_by_index(meta_idx);
+            if (hdr) {
+                esp_insights_cbor_encode_meta_hdr(hdr, "meta_c");
+            }
+        }
     }
     return consumed;
 }
@@ -128,13 +130,6 @@ size_t esp_insights_encode_non_critical_data(const void *data, size_t data_size)
 {
     size_t consumed_max = 0;
     if (data) {
-#if CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES
-        uint8_t meta_idx = ((uint8_t *) data)[0];
-        const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_by_index(meta_idx);
-        if (hdr) {
-            esp_insights_cbor_encode_meta_hdr(hdr, "meta_nc");
-        }
-#endif
 #if CONFIG_DIAG_ENABLE_METRICS
         consumed_max = esp_insights_cbor_encode_diag_metrics(data, data_size);
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
@@ -144,6 +139,15 @@ size_t esp_insights_encode_non_critical_data(const void *data, size_t data_size)
             consumed_max = consumed;
         }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
+#if CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES
+        if (consumed_max) {
+            uint8_t meta_idx = ((uint8_t *) data)[0];
+            const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_by_index(meta_idx);
+            if (hdr) {
+                esp_insights_cbor_encode_meta_hdr(hdr, "meta_nc");
+            }
+        }
+#endif
     }
     return consumed_max;
 }

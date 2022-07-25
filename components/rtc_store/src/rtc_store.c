@@ -40,7 +40,7 @@
  *    which may get stuck in recursive mutex etc. Please be careful if you are using logs...
  */
 
-#if INSIGHTS_DEBUG_ENABLED
+#if CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
 #define RTC_STORE_DBG_PRINTS 1
 #endif
 
@@ -153,7 +153,7 @@ static void rtc_store_read_complete(rbuf_data_t *rbuf_data, size_t len)
         .value = rbuf_data->store->info.value,
     };
 #if RTC_STORE_DBG_PRINTS
-    printf("to free %d, size %d\n", len, rbuf_data->store->size);
+    ESP_LOGI(TAG, "to free %u, size %u", len, rbuf_data->store->size);
 #endif
     // modify new pointers
     info.filled -= len;
@@ -172,15 +172,15 @@ static void rtc_store_write_complete(rbuf_data_t *rbuf_data, size_t len)
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
 #if RTC_STORE_DBG_PRINTS
-    printf("%s: before write_complete, filled %d, size %d, read_offset %d, len %d\n",
-            TAG, info->filled, rbuf_data->store->size, info->read_offset, len);
+    ESP_LOGI(TAG, "before write_complete, filled %"PRIu16", size %u, read_offset %"PRIu16", len %u",
+             info->filled, rbuf_data->store->size, info->read_offset, len);
 #endif
 
     info->filled += len;
 
 #if RTC_STORE_DBG_PRINTS
-    printf("%s: after write_complete, filled %d, size %d, read_offset %d, len %d\n",
-            TAG, info->filled, rbuf_data->store->size, info->read_offset, len);
+    ESP_LOGI(TAG, "after write_complete, filled %"PRIu16", size %u, read_offset %"PRIu16", len %u",
+             info->filled, rbuf_data->store->size, info->read_offset, len);
 #endif
 }
 
@@ -189,9 +189,9 @@ static size_t rtc_store_write_at_offset(rbuf_data_t *rbuf_data, void *data, size
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
 #if RTC_STORE_DBG_PRINTS
-    printf("%s (write_at_offset): size %d, available: %d, filled %d, read_ptr %d, to_write %d\n",
-            TAG, rbuf_data->store->size, data_store_get_free(rbuf_data->store),
-            data_store_get_filled(rbuf_data->store), info->read_offset, len);
+    ESP_LOGI(TAG, "(write_at_offset): size %u, available: %u, filled %u, read_ptr %"PRIu16", to_write %u",
+             rbuf_data->store->size, data_store_get_free(rbuf_data->store),
+             data_store_get_filled(rbuf_data->store), info->read_offset, len);
 #endif
 
     uint16_t write_offset = info->filled + info->read_offset;
@@ -463,7 +463,7 @@ static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
             reset_reason == ESP_RST_POWERON ||
             reset_reason == ESP_RST_BROWNOUT) {
         // TODO: also check if hash is changed
-        rtc_store->info = 0;
+        rtc_store->info.value = 0;
     }
 
     /* Point priv_data to actual RTC data */
