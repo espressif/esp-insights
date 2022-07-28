@@ -351,9 +351,24 @@ static void encode_msg_args(CborEncoder *element, uint8_t *args, uint8_t args_le
 #endif /* CONFIG_DIAG_LOG_MSG_ARG_FORMAT_TLV */
 }
 
-static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *log)
+// use a scratch_pad to memcpy data before access
+// this avoids `potential` unaligned memory accesses as
+// data pointer we receive is not guaranteed to be word aligned
+static union encode_scratch_buf {
+#if (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
+    esp_diag_str_data_pt_t str_data_pt;
+    esp_diag_data_pt_t data_pt;
+#endif
+    esp_diag_log_data_t log_data_pt;
+} enc_scratch_buf;
+
+static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *data)
 {
     CborEncoder element;
+    esp_diag_log_data_t *log = &enc_scratch_buf.log_data_pt;
+    // copy at aligned address to avoid potential alignment issue
+    memcpy(log, data, sizeof(esp_diag_str_data_pt_t));
+
     cbor_encoder_create_map(list, &element, CborIndefiniteLength);
     cbor_encode_text_stringz(&element, "ts");
     cbor_encode_uint(&element, log->timestamp);
@@ -383,7 +398,10 @@ static size_t encode_log_list(CborEncoder *map, esp_diag_log_type_t type,
     uint8_t meta_idx = data[0];
     while (size > sizeof (esp_diag_log_data_t)) {
         if (data[i] != meta_idx) {
-            printf("skipping data for next iteration meta %d, data[i] %d, i %d\n", meta_idx, data[i], i);
+#if INSIGHTS_DEBUG_ENABLED
+            printf("%s: skip data for next iteration meta: %d, data[i]: %d, itr: %d\n",
+                    "insights_cbor_enocoder", meta_idx, data[i], i);
+#endif
             break; // do not encode for next meta info
         }
         i += 1; // skip meta byte
@@ -428,8 +446,9 @@ static void encode_str_data_pt(CborEncoder *array, const uint8_t *data)
 {
     CborEncoder map;
     cbor_encoder_create_map(array, &map, CborIndefiniteLength);
-
-    esp_diag_str_data_pt_t *m_data = (esp_diag_str_data_pt_t *)data;
+    esp_diag_str_data_pt_t *m_data = &enc_scratch_buf.str_data_pt;
+    // copy at aligned address to avoid potential alignment issue
+    memcpy(m_data, data, sizeof(esp_diag_str_data_pt_t));
     cbor_encode_text_stringz(&map, "n");
     cbor_encode_text_stringz(&map, m_data->key);
     cbor_encode_text_stringz(&map, "v");
@@ -444,8 +463,10 @@ static void encode_data_pt(CborEncoder *array, const uint8_t *data)
 {
     CborEncoder map;
     cbor_encoder_create_map(array, &map, CborIndefiniteLength);
+    esp_diag_data_pt_t *m_data = &enc_scratch_buf.data_pt;
+    // copy at aligned address to avoid potential alignment issue
+    memcpy(m_data, data, sizeof(esp_diag_data_pt_t));
 
-    esp_diag_data_pt_t *m_data = (esp_diag_data_pt_t *)data;
     cbor_encode_text_stringz(&map, "n");
     cbor_encode_text_stringz(&map, m_data->key);
     cbor_encode_text_stringz(&map, "v");
@@ -489,7 +510,9 @@ static size_t encode_data_points(const uint8_t *data, size_t size, const char *k
     rtc_store_non_critical_data_hdr_t header;
     esp_diag_data_type_t data_type;
 
-    if (!data) {
+    if (!data || (size <= sizeof(header))) {
+        printf("%s: Invalid arg! data %p, size %d. line %d\n",
+                "insights_cbor_enocoder", data, size, __LINE__);
         return 0;
     }
     cbor_encode_text_stringz(&s_diag_data_map, key);
@@ -497,18 +520,21 @@ static size_t encode_data_points(const uint8_t *data, size_t size, const char *k
     uint8_t meta_idx = data[0];
     while (size > sizeof(header)) { // if remaining
         if (data[i] != meta_idx) {
-            printf("skipping data for next iteration meta %d, data[i] %d, i %d\n", meta_idx, data[i], i);
+#if INSIGHTS_DEBUG_ENABLED
+            printf("%s: skip data for next iteration meta: %d, data[i]: %d, itr: %d\n",
+                    "insights_cbor_enocoder", meta_idx, data[i], i);
+#endif
             break; // do not encode for next meta info
         }
         i += 1; // skip meta_idx byte
         size -= 1;
 
-        // memset(&header, 0, sizeof(header));
         memcpy(&header, data + i, sizeof(header));
         if (sizeof(header) + header.len > size) {
 #if INSIGHTS_DEBUG_ENABLED
             // partial record
-            printf("partial record, needed %d, size %d\n", sizeof(header) + header.len, size);
+            printf("%s: partial record, needed %d, size %d\n",
+                    "insights_cbor_enocoder", sizeof(header) + header.len, size);
 #endif
             i -= 1;
             size += 1;
@@ -518,8 +544,8 @@ static size_t encode_data_points(const uint8_t *data, size_t size, const char *k
         if (!header.dg || !esp_ptr_in_drom(header.dg) || !header.len) {
 #if INSIGHTS_DEBUG_ENABLED
             // invalid record
-            printf("invalid record, header.dg %p, ptr_in_drom %d, header.len %d\n",
-                   header.dg, esp_ptr_in_drom(header.dg), header.len);
+            printf("%s: invalid record, header.dg %p, ptr_in_drom %d, header.len %d\n",
+                   "insights_cbor_enocoder", header.dg, esp_ptr_in_drom(header.dg), header.len);
 
             ESP_LOG_BUFFER_HEX_LEVEL("cbor_enc", data, size, ESP_LOG_INFO);
 #endif
