@@ -17,6 +17,11 @@ if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER "4.2")
     list(APPEND priv_req esp_hw_support)
 endif()
 
+# from IDF version 5.0, we need to explicitly specify requirements
+if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
+    list(APPEND priv_req esp_wifi)
+endif()
+
 set(pub_req esp_diagnostics)
 
 idf_component_register(SRCS ${srcs}
