@@ -36,7 +36,7 @@ typedef enum {
     RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL, /*!< Non critical data write failed */
 } rtc_store_event_t;
 
-#define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1)
+#define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA / 2)
 
 /**
  * @brief header record to identify firmware/boot data a record represent

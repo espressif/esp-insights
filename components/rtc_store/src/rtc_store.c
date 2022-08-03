@@ -96,6 +96,7 @@ typedef struct {
     rbuf_data_t critical;
     rbuf_data_t non_critical;
     rtc_store_meta_header_t *meta_hdr;
+    char sha_sum[2 * SHA_SIZE + 1];
 } rtc_store_priv_data_t;
 
 // have a strategy to invalidate data beyond this
@@ -489,6 +490,20 @@ rtc_store_meta_header_t *rtc_store_get_meta_record_by_index(uint8_t idx)
     return &s_rtc_store.meta[idx];
 }
 
+static inline uint8_t to_int_digit(unsigned val)
+{
+    return (val <= '9') ? (val - '0') : (val - 'a' + 10);
+}
+
+static void hex_to_bytes(uint8_t *src, uint8_t *dst, int out_len)
+{
+    for (int i = 0; i < out_len; i++) {
+        uint8_t val0 = to_int_digit(src[2 * i]);
+        uint8_t val1 = to_int_digit(src[2 * i + 1]);
+        dst[i] = (val0 << 4) | (val1);
+    }
+}
+
 static esp_err_t rtc_store_meta_hdr_init()
 {
     uint8_t gen_id = 0, boot_cnt = 0;
@@ -531,7 +546,9 @@ skip_nvs_read_write:
     s_priv_data.meta_hdr = &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
 
     // populate meta header
-    esp_ota_get_app_elf_sha256(s_priv_data.meta_hdr->sha_sum, SHA_SIZE);
+    esp_ota_get_app_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
+    hex_to_bytes((uint8_t *) s_priv_data.sha_sum, (uint8_t *) s_priv_data.meta_hdr->sha_sum, SHA_SIZE);
+
     s_priv_data.meta_hdr->gen_id = gen_id;
     s_priv_data.meta_hdr->boot_cnt = boot_cnt;
 

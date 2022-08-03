@@ -190,7 +190,22 @@ static union encode_scratch_buf {
     esp_diag_data_pt_t data_pt;
 #endif
     esp_diag_log_data_t log_data_pt;
+    char sha_sum[2 * SHA_SIZE + 1];
 } enc_scratch_buf;
+
+static inline uint8_t to_hex_digit(unsigned val)
+{
+    return (val < 10) ? ('0' + val) : ('a' + val - 10);
+}
+
+static void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len)
+{
+    for (int i = 0; i < in_len; i++) {
+        dst[2 * i] = to_hex_digit(src[i] >> 4);
+        dst[2 * i + 1] = to_hex_digit(src[i] & 0xf);
+    }
+    dst[2 * in_len] = 0;
+}
 
 void esp_insights_cbor_encode_meta_hdr(const rtc_store_meta_header_t *hdr, const char *type)
 {
@@ -199,7 +214,8 @@ void esp_insights_cbor_encode_meta_hdr(const rtc_store_meta_header_t *hdr, const
     cbor_encoder_create_map(&s_diag_data_map, &hdr_map, CborIndefiniteLength);
 
     cbor_encode_text_stringz(&hdr_map, "sha256");
-    cbor_encode_text_stringz(&hdr_map, hdr->sha_sum);
+    bytes_to_hex((uint8_t *) hdr->sha_sum, (uint8_t *) enc_scratch_buf.sha_sum, SHA_SIZE); // expand uint8 packed data to hex
+    cbor_encode_text_stringz(&hdr_map, enc_scratch_buf.sha_sum);
     cbor_encode_text_stringz(&hdr_map, "gen_id");
     cbor_encode_uint(&hdr_map, hdr->gen_id);
     cbor_encode_text_stringz(&hdr_map, "boot_cnt");
@@ -350,17 +366,6 @@ static void encode_msg_args(CborEncoder *element, uint8_t *args, uint8_t args_le
     cbor_encode_text_stringz(element, (char *)args);
 #endif /* CONFIG_DIAG_LOG_MSG_ARG_FORMAT_TLV */
 }
-
-// use a scratch_pad to memcpy data before access
-// this avoids `potential` unaligned memory accesses as
-// data pointer we receive is not guaranteed to be word aligned
-static union encode_scratch_buf {
-#if (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
-    esp_diag_str_data_pt_t str_data_pt;
-    esp_diag_data_pt_t data_pt;
-#endif
-    esp_diag_log_data_t log_data_pt;
-} enc_scratch_buf;
 
 static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *data)
 {
