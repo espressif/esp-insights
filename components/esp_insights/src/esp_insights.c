@@ -86,6 +86,7 @@ typedef struct {
     TimerHandle_t data_send_timer; /* timer to reset data_send_inprogress flag on timeout */
     char *node_id;
     int boot_msg_id;   /* To track whether first message is sent or not, -1:failed, 0:success, >0:inprogress */
+    bool init_done;
 } esp_insights_data_t;
 
 #ifdef CONFIG_ESP_INSIGHTS_ENABLED
@@ -106,11 +107,12 @@ static void esp_insights_first_call(void *priv_data)
     xTimerStart(entry->timer, 0);
 }
 
-/* Returns ESP_OK if wifi is connected, error code otherwise */
-static esp_err_t is_wifi_connected(void)
+/* Returns true if wifi is connected and insights is enabled, false otherwise */
+static bool is_insights_active(void)
 {
     wifi_ap_record_t ap_info;
-    return esp_wifi_sta_get_ap_info(&ap_info);
+    bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
+    return wifi_connected && s_insights_data.init_done;
 }
 
 /* This executes in the context of timer task.
@@ -134,7 +136,7 @@ static void esp_insights_common_cb(TimerHandle_t handle)
     xSemaphoreGive(s_insights_data.data_lock);
 
     if (entry) {
-        if (is_wifi_connected() == ESP_OK) {
+        if (is_insights_active() == true) {
             esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
         }
         /* If data was sent during previous timer interval, double the period */
@@ -441,7 +443,7 @@ static void insights_periodic_handler(void *priv_data)
 {
     xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
     /* Return if wifi is disconnected */
-    if (is_wifi_connected() != ESP_OK) {
+    if (is_insights_active() == false) {
         s_insights_data.data_send_inprogress = false;
         xSemaphoreGive(s_insights_data.data_lock);
         return;
@@ -462,13 +464,12 @@ static void insights_periodic_handler(void *priv_data)
 
 esp_err_t esp_insights_send_data(void)
 {
-    esp_err_t err = is_wifi_connected();
-    if (err == ESP_OK) {
+    if (is_insights_active() == true) {
         ESP_LOGI(TAG, "Sending data to cloud");
         return esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
     }
     ESP_LOGW(TAG, "Wi-Fi not in connected state");
-    return err;
+    return ESP_FAIL;
 }
 
 static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
@@ -485,7 +486,7 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
             ESP_LOGI(TAG, "RTC_STORE_EVENT_%sCRITICAL_DATA_LOW_MEM",
                     event_id == RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM ? "" : "NON_");
 #endif
-            if (is_wifi_connected() == ESP_OK) {
+            if (is_insights_active() == true) {
                 esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
             }
             break;
@@ -631,6 +632,7 @@ void esp_insights_deinit(void)
     esp_insights_disable();
     esp_insights_transport_unregister();
     esp_rmaker_work_queue_deinit();
+    s_insights_data.init_done = false;
 }
 
 /* Use the node id provided by user, if it is NULL and transport is set to MQTT then
@@ -814,6 +816,8 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to start Work Queue.");
         goto init_err;
     }
+
+    s_insights_data.init_done = true;
     return ESP_OK;
 init_err:
     if (s_insights_data.node_id) {
