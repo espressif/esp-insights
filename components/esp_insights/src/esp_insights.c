@@ -198,7 +198,8 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
     s_periodic_insights_entry->min_seconds = min_seconds;
     s_periodic_insights_entry->max_seconds = max_seconds;
     s_periodic_insights_entry->cur_seconds = min_seconds;
-    s_periodic_insights_entry->timer = xTimerCreate("test", (s_periodic_insights_entry->cur_seconds * 1000)/ portTICK_PERIOD_MS, pdFALSE, (void *)s_periodic_insights_entry, esp_insights_common_cb);
+    s_periodic_insights_entry->timer = xTimerCreate("test", (s_periodic_insights_entry->cur_seconds * 1000)/ portTICK_PERIOD_MS,
+                                                    pdFALSE, (void *)s_periodic_insights_entry, esp_insights_common_cb);
     if (!s_periodic_insights_entry->timer) {
         free(s_periodic_insights_entry);
         return ESP_FAIL;
@@ -512,13 +513,21 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
 
 static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
 {
-    return rtc_store_critical_data_write(data, len);
+    esp_err_t ret_val = rtc_store_critical_data_write(data, len);
+    if (ret_val != ESP_OK) {
+        printf("rtc_store_critical_data_write failed len %d, err 0x%04x\n", len, ret_val);
+    }
+    return ret_val;
 }
 
 #if CONFIG_DIAG_ENABLE_METRICS
 static esp_err_t metrics_write_cb(const char *group, void *data, size_t len, void *cb_arg)
 {
-    return rtc_store_non_critical_data_write(group, data, len);
+    esp_err_t ret_val = rtc_store_non_critical_data_write(group, data, len);
+    if (ret_val != ESP_OK) {
+        printf("rtc_store_non_critical_data_write failed group %s, len %d, err 0x%04x\n", group, len, ret_val);
+    }
+    return ret_val;
 }
 
 static void metrics_init(void)
