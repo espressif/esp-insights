@@ -41,12 +41,12 @@
 #endif
 
 #define TASK_SNAP_TAG       "task_snap"
-#define TASK_INFO_FMT       "task:%s state:%d high_watermark:%d "
+#define TASK_INFO_FMT       "task:%s state:%"PRIu32" high_watermark:%"PRIu32" "
 #define BT_FMT              "bt:"
-#define BT_DEPTH_FMT_1      "0x%x "
-#define BT_DEPTH_FMT_2      "0x%x 0x%x "
-#define BT_DEPTH_FMT_3      "0x%x 0x%x 0x%x "
-#define BT_DEPTH_FMT_4      "0x%x 0x%x 0x%x 0x%x "
+#define BT_DEPTH_FMT_1      "0x%"PRIx32" "
+#define BT_DEPTH_FMT_2      "0x%"PRIx32" 0x%"PRIx32" "
+#define BT_DEPTH_FMT_3      "0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32" "
+#define BT_DEPTH_FMT_4      "0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32" "
 #define BT_DEPTH_FMT_8      BT_DEPTH_FMT_4 BT_DEPTH_FMT_4
 #define BT_DEPTH_FMT_16     BT_DEPTH_FMT_8 BT_DEPTH_FMT_8
 

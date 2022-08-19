@@ -103,7 +103,7 @@ static void esp_insights_first_call(void *priv_data)
     esp_insights_entry_t *entry = (esp_insights_entry_t *)priv_data;
     esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
     /* Start timer here so that the function is called periodically */
-    ESP_LOGI(TAG, "Scheduling Insights timer for %d seconds.", entry->cur_seconds);
+    ESP_LOGI(TAG, "Scheduling Insights timer for %"PRIu32" seconds.", entry->cur_seconds);
     xTimerStart(entry->timer, 0);
 }
 

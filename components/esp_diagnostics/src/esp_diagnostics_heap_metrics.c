@@ -62,7 +62,7 @@ esp_err_t esp_diag_heap_metrics_dump(void)
     RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
                         "Failed to add heap metric key:" KEY_MIN_FREE);
 
-    ESP_LOGI(LOG_TAG, KEY_FREE ":0x%x " KEY_LFB ":0x%x " KEY_MIN_FREE ":0x%x", free, lfb, min_free_ever);
+    ESP_LOGI(LOG_TAG, KEY_FREE ":0x%"PRIx32" " KEY_LFB ":0x%"PRIx32" " KEY_MIN_FREE ":0x%"PRIx32, free, lfb, min_free_ever);
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
     free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     lfb = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
@@ -75,7 +75,7 @@ esp_err_t esp_diag_heap_metrics_dump(void)
     RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_EXT_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
                         "Failed to add heap metric key:" KEY_EXT_MIN_FREE);
 
-    ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%x " KEY_EXT_LFB ":0x%x " KEY_EXT_MIN_FREE ":0x%x", free, lfb, min_free_ever);
+    ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%"PRIx32" " KEY_EXT_LFB ":0x%"PRIx32" " KEY_EXT_MIN_FREE ":0x%"PRIx32, free, lfb, min_free_ever);
 #endif /* CONFIG_ESP32_SPIRAM_SUPPORT */
     return ESP_OK;
 }
