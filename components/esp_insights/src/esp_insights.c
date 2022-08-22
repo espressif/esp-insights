@@ -400,7 +400,9 @@ static void send_insights_data(void)
             esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
             rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
         }
-        len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
+        if (critical_data || non_critical_data) {
+            len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
+        }
     }
 
     if (len == 0) {
