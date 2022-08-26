@@ -62,7 +62,7 @@ static void smoke_test(void *arg)
             if (s_reset_count > MAX_CRASHES) {
                 ESP_DIAG_EVENT(TAG, "[count][%d]", count);
             } else {
-               ESP_LOGE(TAG, "[count][%d] [crash_count][%d] [excvaddr][0x0f] Crashing...", count, s_reset_count);
+               ESP_LOGE(TAG, "[count][%d] [crash_count][%"PRIu32"] [excvaddr][0x0f] Crashing...", count, s_reset_count);
                *(int *)0x0F = 0x10;
            }
         }
@@ -77,7 +77,7 @@ static void smoke_test(void *arg)
             void *p = malloc(size);
             if (p) {
                 memset(p, size, 'A' + (esp_random() % 26));
-                ESP_LOGI(TAG, "Allocated %d bytes", size);
+                ESP_LOGI(TAG, "Allocated %"PRIu32" bytes", size);
             }
             s_ptrs[count % MAX_PTRS] = p;
         } else {

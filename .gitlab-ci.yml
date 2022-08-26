@@ -5,99 +5,80 @@ stages:
 variables:
   V: "0"
   MAKEFLAGS: "-j8 --no-keep-going"
-  IDF_PATH: "$CI_PROJECT_DIR/esp-idf"
   APP_BUILD: "all"
   GIT_SUBMODULE_STRATEGY: recursive
 
 before_script:
-   # add gitlab ssh key
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - echo -n $GITLAB_KEY > ~/.ssh/id_rsa_base64
-    - base64 --decode --ignore-garbage ~/.ssh/id_rsa_base64 > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - echo -e "Host gitlab.espressif.cn\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
-    # Create insights-bins-${CI_JOB_ID}/ dir (to copy binaries into for artifacts)
-    - mkdir -p $CI_PROJECT_DIR/insights-bins-${CI_JOB_ID}
-
-.setup_idf: &setup_idf
-# Checking git version
-- echo Checking git version
-- git --version
-# Cloning esp-idf - Started
-- echo Cloning esp-idf - Started
-- git clone --recursive --branch ${IDF_GIT_BRANCH} --depth 1 ${IDF_GIT_PATH}/esp-idf.git
-- cd esp-idf
-- echo Cloning esp-idf - Done
-# Cloning esp-idf - Done
-# Running install.sh - Started
-- echo Running install.sh - Started
-- ./install.sh
-- echo Running install.sh - Done
-# Running install.sh - Done
-# Running export.sh - Started
-- echo Running export.sh - Started
-- . export.sh
-- echo Running export.sh - Done
-# Running export.sh - Done
+  # add gitlab ssh key
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - echo -n $GITLAB_KEY > ~/.ssh/id_rsa_base64
+  - base64 --decode --ignore-garbage ~/.ssh/id_rsa_base64 > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  - echo -e "Host gitlab.espressif.cn\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
+  # Create insights-bins-${CI_JOB_ID}/ dir (to copy binaries into for artifacts)
+  - mkdir -p $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}
 
 .build_minimal_diagnostics: &build_minimal_diagnostics
-# Building minimal_diagnostics app - Started
-- echo Building minimal_diagnostics app - Started
-- ls
-- cd $CI_PROJECT_DIR/examples/minimal_diagnostics
-# Build this for MQTT transport
-- echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
-- echo Running idf.py
-- idf.py build
-- echo Building minimal_diagnostics app - Done
-# Building minimal_diagnostics app - Done
-# Copying minimal_diagnostics.bin to insights-bins-${CI_JOB_ID}/
-- echo Copy minimal_diagnostics.bin to insights-bins-${CI_JOB_ID}/
-- cp $CI_PROJECT_DIR/examples/minimal_diagnostics/build/minimal_diagnostics.bin $CI_PROJECT_DIR/insights-bins-${CI_JOB_ID}/
+  # Building minimal_diagnostics app - Started
+  - echo Building minimal_diagnostics app - Started
+  - ls
+  - cd $CI_PROJECT_DIR/examples/minimal_diagnostics
+  # Build this for MQTT transport
+  - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
+  - echo Running idf.py
+  - idf.py build
+  - echo Building minimal_diagnostics app - Done
+  # Building minimal_diagnostics app - Done
+  # Copying minimal_diagnostics.bin to esp-insights-bins-${CI_JOB_ID}/
+  - echo Copy minimal_diagnostics.bin to esp-insights-bins-${CI_JOB_ID}/
+  - cp $CI_PROJECT_DIR/examples/minimal_diagnostics/build/minimal_diagnostics.bin $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}/
 
 .build_diagnostics_smoke_test: &build_diagnostics_smoke_test
-- echo Building diagnostics_smoke_test app - Started
-- ls
-- cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
+  - echo Building diagnostics_smoke_test app - Started
+  - ls
+  - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
 
-# Build this example for HTTPS transport, insights_auth_key.txt file is required
-- touch main/insights_auth_key.txt
+  # Build this example for HTTPS transport, insights_auth_key.txt file is required
+  - touch main/insights_auth_key.txt
+  - for TARGET in $EXAMPLE_TARGETS; do
+  - echo Building diagnostics_smoke_test for $TARGET
+  - idf.py set-target $TARGET
+  - idf.py build
+  # Copying diagnostics smoke binary for esp-idf master and target ESP32 to artifacts
+  - echo Copy diagnostics_smoke_test.bin to esp-insights-bins-${CI_JOB_ID}/
+  - mkdir -p $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}/diagnostics_smoke_test/$TARGET/
+  - cp $CI_PROJECT_DIR/examples/diagnostics_smoke_test/build/diagnostics_smoke_test.bin $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}/diagnostics_smoke_test/$TARGET/
+  - rm -rf build sdkconfig
+  - done
+  - echo Building diagnostics_smoke_test Done
+  # Generating zip file for binaries generated
+  - cd $CI_PROJECT_DIR
+  - echo Generating zip file for binaries generated
+  - tar -zcvf esp-insights-bins-${CI_JOB_ID}.zip esp-insights-bins-${CI_JOB_ID}/
 
-# esp-idf tag v4.3.2, target:ESP32
-- echo Building app on esp-idf master for ESP32
-- idf.py set-target esp32
-- idf.py build
-# Copying diagnostics smoke binary for esp-idf master and target ESP32 to artifacts
-- echo Copy diagnostics_smoke_test.bin to insights-bins-${CI_JOB_ID}/
-- cp $CI_PROJECT_DIR/examples/diagnostics_smoke_test/build/diagnostics_smoke_test.bin $CI_PROJECT_DIR/insights-bins-${CI_JOB_ID}/
-- rm -rf build sdkconfig
-
-# esp-idf tag v4.3.2, target:ESP32S2
-- echo Building app on esp-idf master for ESP32S2
-- idf.py set-target esp32s2
-- idf.py build
-- rm -rf build sdkconfig
-
-# esp-idf tag v4.3.2, target:ESP32C3
-- echo Building app on esp-idf master for ESP32C3
-- idf.py set-target esp32c3
-- idf.py build
-- rm -rf build sdkconfig
-
-- echo Building diagnostics_smoke_test app - Done
-
-build_app:
+.build_template:
   stage: build
-  image: $CI_DOCKER_REGISTRY/esp32-ci-env:esp-insights
+  image: espressif/idf:latest
   tags:
     - build
+  # variables: # disabled as we get some errors from IDF as well
+  #   PEDANTIC_FLAGS: "-Werror -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
+  #   EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
+  #   EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
   artifacts:
     paths:
-      - $CI_PROJECT_DIR/insights-bins-${CI_JOB_ID}.zip
+      - $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}.zip
     expire_in: 6 mos
   script:
-    - *setup_idf
+    # Check and apply coredump patch for IDF 4.1 an 4.2
+    - cd $IDF_PATH
+    - cp $CI_PROJECT_DIR/idf-patches/Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch .
+    - if [[ "$COREDUMP_PATCH" == "1" ]]; then
+    - patch -p1 < Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch
+    - fi
+    - cd -
+    # build example
     - for APP in $APP_BUILD; do
     - if [[ "$APP_BUILD" == "all" || "$APP" == "minimal_diagnostics" ]]; then
     - *build_minimal_diagnostics
@@ -107,14 +88,45 @@ build_app:
     - fi
     - done
     - echo Build Complete for $APP_BUILD
-    # Generating zip file for binaries generated
-    - cd $CI_PROJECT_DIR
-    - echo Generating zip file for binaries generated
-    - tar -zcvf insights-bins-${CI_JOB_ID}.zip insights-bins-${CI_JOB_ID}/
-  
+
+build_idf_v5.0:
+  extends: .build_template
+  image: espressif/idf:release-v5.0
+  variables: # esp32c2 not included b'coz of link error on cpu coredump
+    EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
+    COREDUMP_PATCH: "0"
+
+build_idf_v4.4:
+  extends: .build_template
+  image: espressif/idf:release-v4.4
+  variables:
+    EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
+    COREDUMP_PATCH: "0"
+
+build_idf_v4.3:
+  extends: .build_template
+  image: espressif/idf:release-v4.3
+  variables:
+    EXAMPLE_TARGETS: esp32 esp32s2 esp32c3
+    COREDUMP_PATCH: "0"
+
+build_idf_v4.2.2:
+  extends: .build_template
+  image: espressif/idf:v4.2.2
+  variables:
+    COREDUMP_PATCH: "1"
+    EXAMPLE_TARGETS: esp32
+
+build_idf_v4.1.2:
+  extends: .build_template
+  image: espressif/idf:v4.1.2
+  variables:
+    COREDUMP_PATCH: "1"
+    EXAMPLE_TARGETS: esp32
+
 push_master_to_github:
   stage: deploy
-  image: $CI_DOCKER_REGISTRY/esp32-ci-env:esp-insights
+  image: espressif/idf:release-v5.0
   tags:
     - build
   when: on_success

@@ -2,18 +2,18 @@ Diagnostics support in ESP-IDF release v4.1.2 and release v4.2.2
 
 ---
  components/espcoredump/CMakeLists.txt         |   2 +-
- .../espcoredump/include/esp_core_dump.h       |  46 ++++++-
+ .../espcoredump/include/esp_core_dump.h       |  48 ++++++-
  .../xtensa/esp_core_dump_summary_extra_info.h |  36 ++++++
  .../include_core_dump/esp_core_dump_port.h    |  28 ++++
  .../include_core_dump/esp_core_dump_priv.h    |   4 +-
  components/espcoredump/src/core_dump_elf.c    | 121 ++++++++++++++++++
- components/espcoredump/src/core_dump_flash.c  |  34 +++++
+ components/espcoredump/src/core_dump_flash.c  | 117 +++++++++++++++++
  components/espcoredump/src/core_dump_port.c   |  87 +++++++++++++
- 8 files changed, 354 insertions(+), 4 deletions(-)
+ 8 files changed, 439 insertions(+), 4 deletions(-)
  create mode 100644 components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h
 
 diff --git a/components/espcoredump/CMakeLists.txt b/components/espcoredump/CMakeLists.txt
-index bce1224b03d..8a3319c44ed 100644
+index bce1224b03..8a3319c44e 100644
 --- a/components/espcoredump/CMakeLists.txt
 +++ b/components/espcoredump/CMakeLists.txt
 @@ -3,7 +3,7 @@
@@ -26,7 +26,7 @@ index bce1224b03d..8a3319c44ed 100644
                      LDFRAGMENTS linker.lf
                      PRIV_REQUIRES spi_flash app_update mbedtls esp_rom soc)
 diff --git a/components/espcoredump/include/esp_core_dump.h b/components/espcoredump/include/esp_core_dump.h
-index 7d8d56c5fec..c03d3a1636f 100644
+index 7d8d56c5fe..8343ddbd7e 100644
 --- a/components/espcoredump/include/esp_core_dump.h
 +++ b/components/espcoredump/include/esp_core_dump.h
 @@ -17,6 +17,32 @@
@@ -71,10 +71,12 @@ index 7d8d56c5fec..c03d3a1636f 100644
  
  /**
   * @brief  Print base64-encoded core dump to UART.
-@@ -85,4 +111,22 @@ void esp_core_dump_to_uart(XtExcFrame *frame);
+@@ -85,4 +111,24 @@ void esp_core_dump_to_uart(XtExcFrame *frame);
   */
  esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size);
  
++esp_err_t esp_core_dump_image_check(void);
++
 +/**
 + * @brief  Erases coredump data in flash. esp_core_dump_image_get() will then return
 + *         ESP_ERR_NOT_FOUND. Can be used after a coredump has been transmitted successfully.
@@ -96,7 +98,7 @@ index 7d8d56c5fec..c03d3a1636f 100644
  #endif
 diff --git a/components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h b/components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h
 new file mode 100644
-index 00000000000..dc9d9a2cc80
+index 0000000000..dc9d9a2cc8
 --- /dev/null
 +++ b/components/espcoredump/include/port/xtensa/esp_core_dump_summary_extra_info.h
 @@ -0,0 +1,36 @@
@@ -137,7 +139,7 @@ index 00000000000..dc9d9a2cc80
 +}
 +#endif
 diff --git a/components/espcoredump/include_core_dump/esp_core_dump_port.h b/components/espcoredump/include_core_dump/esp_core_dump_port.h
-index 49090cf3318..72c1beb3515 100644
+index b6ea923c0f..83772234ec 100644
 --- a/components/espcoredump/include_core_dump/esp_core_dump_port.h
 +++ b/components/espcoredump/include_core_dump/esp_core_dump_port.h
 @@ -28,6 +28,7 @@
@@ -148,7 +150,7 @@ index 49090cf3318..72c1beb3515 100644
  
  #ifdef __cplusplus
  extern "C" {
-@@ -85,6 +86,33 @@ uint32_t esp_core_dump_get_isr_stack_end(void);
+@@ -86,6 +87,33 @@ uint32_t esp_core_dump_get_isr_stack_end(void);
  
  void esp_core_dump_report_stack_usage(void);
  
@@ -183,7 +185,7 @@ index 49090cf3318..72c1beb3515 100644
  #define COREDUMP_STACK_FILL_BYTE	        (0xa5U)
  extern uint8_t s_coredump_stack[];
 diff --git a/components/espcoredump/include_core_dump/esp_core_dump_priv.h b/components/espcoredump/include_core_dump/esp_core_dump_priv.h
-index d991b053028..2bb9914d134 100644
+index d991b05302..2bb9914d13 100644
 --- a/components/espcoredump/include_core_dump/esp_core_dump_priv.h
 +++ b/components/espcoredump/include_core_dump/esp_core_dump_priv.h
 @@ -11,8 +11,8 @@
@@ -198,7 +200,7 @@ index d991b053028..2bb9914d134 100644
  #ifdef __cplusplus
  extern "C" {
 diff --git a/components/espcoredump/src/core_dump_elf.c b/components/espcoredump/src/core_dump_elf.c
-index 0414178c995..9032290b007 100644
+index ad471db5c5..505e47ce4b 100644
 --- a/components/espcoredump/src/core_dump_elf.c
 +++ b/components/espcoredump/src/core_dump_elf.c
 @@ -15,6 +15,7 @@
@@ -335,22 +337,22 @@ index 0414178c995..9032290b007 100644
 +
  #endif //CONFIG_ESP32_COREDUMP_DATA_FORMAT_ELF
 diff --git a/components/espcoredump/src/core_dump_flash.c b/components/espcoredump/src/core_dump_flash.c
-index 519e5364dcd..634062e3a32 100644
+index f874f84983..e7fbb9cb33 100644
 --- a/components/espcoredump/src/core_dump_flash.c
 +++ b/components/espcoredump/src/core_dump_flash.c
 @@ -24,6 +24,8 @@
-
+ 
  const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_flash";
-
+ 
 +#define BLANK_COREDUMP_SIZE 0xFFFFFFFF
 +
  #if CONFIG_ESP32_ENABLE_COREDUMP_TO_FLASH
-
+ 
  typedef struct _core_dump_partition_t
-@@ -269,6 +271,38 @@ void esp_core_dump_init(void)
+@@ -269,6 +271,121 @@ void esp_core_dump_init(void)
  }
  #endif
-
+ 
 +esp_err_t esp_core_dump_image_erase(void)
 +{
 +    /* Find the partition that could potentially contain a (previous) core dump. */
@@ -383,11 +385,94 @@ index 519e5364dcd..634062e3a32 100644
 +    return err;
 +}
 +
++esp_err_t esp_core_dump_image_check(void)
++{
++    esp_err_t err;
++    const void *core_data;
++    spi_flash_mmap_handle_t core_data_handle;
++
++    size_t out_size = 0;
++
++    const esp_partition_t *core_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
++                                                                ESP_PARTITION_SUBTYPE_DATA_COREDUMP,
++                                                                NULL);
++    if (!core_part) {
++        ESP_LOGE(TAG, "No core dump partition found!");
++        return ESP_ERR_NOT_FOUND;
++    }
++    if (core_part->size < sizeof(uint32_t)) {
++        ESP_LOGE(TAG, "Too small core dump partition!");
++        return ESP_ERR_INVALID_SIZE;
++    }
++
++    err = esp_partition_mmap(core_part, 0,  sizeof(uint32_t),
++                             SPI_FLASH_MMAP_DATA, &core_data, &core_data_handle);
++    if (err != ESP_OK) {
++        ESP_LOGE(TAG, "Failed to mmap core dump data (%d)!", err);
++        return err;
++    }
++
++    uint32_t *dw = (uint32_t *)core_data;
++    out_size = *dw;
++    spi_flash_munmap(core_data_handle);
++    if (out_size == 0xFFFFFFFF) {
++        ESP_LOGD(TAG, "Blank core dump partition!");
++        return ESP_ERR_INVALID_SIZE;
++    } else if ((out_size < sizeof(uint32_t)) || (out_size > core_part->size)) {
++        ESP_LOGE(TAG, "Incorrect size of core dump image: %d", out_size);
++        return ESP_ERR_INVALID_SIZE;
++    }
++
++    // remap full core dump with CRC
++    err = esp_partition_mmap(core_part, 0, out_size,
++                             SPI_FLASH_MMAP_DATA, &core_data, &core_data_handle);
++    if (err != ESP_OK) {
++        ESP_LOGE(TAG, "Failed to mmap core dump data (%d)!", err);
++        return err;
++    }
++    // TODO: check CRC or SHA basing on the version of coredump image stored in flash
++#if CONFIG_ESP32_COREDUMP_CHECKSUM_CRC32
++    uint32_t *crc = (uint32_t *)(((uint8_t *)core_data) + out_size);
++    crc--; // Point to CRC field
++
++    // Calculate CRC over core dump data except for CRC field
++    core_dump_crc_t cur_crc = crc32_le(0, (uint8_t const *)core_data, out_size - sizeof(core_dump_crc_t));
++    if (*crc != cur_crc) {
++        ESP_LOGD(TAG, "Core dump CRC offset 0x%x, data size: %u",
++                (uint32_t)((uint32_t)crc - (uint32_t)core_data), out_size);
++        ESP_LOGE(TAG, "Core dump data CRC check failed: 0x%x -> 0x%x!", *crc, cur_crc);
++        spi_flash_munmap(core_data_handle);
++        return ESP_ERR_INVALID_CRC;
++    }
++#elif CONFIG_ESP32_COREDUMP_CHECKSUM_SHA256
++    uint8_t* sha256_ptr = (uint8_t*)(((uint8_t *)core_data) + out_size);
++    sha256_ptr -= COREDUMP_SHA256_LEN;
++    ESP_LOGD(TAG, "Core dump data offset, size: %d, %u!",
++                    (uint32_t)((uint32_t)sha256_ptr - (uint32_t)core_data), out_size);
++    unsigned char sha_output[COREDUMP_SHA256_LEN];
++    mbedtls_sha256_context ctx;
++    ESP_LOGI(TAG, "Calculate SHA256 for coredump:");
++    (void)esp_core_dump_sha(&ctx, core_data, out_size - COREDUMP_SHA256_LEN, sha_output);
++    if (memcmp((uint8_t*)sha256_ptr, (uint8_t*)sha_output, COREDUMP_SHA256_LEN) != 0) {
++        ESP_LOGE(TAG, "Core dump data SHA256 check failed:");
++        esp_core_dump_print_sha256("Calculated SHA256", (uint8_t*)sha_output);
++        esp_core_dump_print_sha256("Image SHA256",(uint8_t*)sha256_ptr);
++        spi_flash_munmap(core_data_handle);
++        return ESP_ERR_INVALID_CRC;
++    } else {
++        ESP_LOGI(TAG, "Core dump data SHA256 is correct");
++    }
++#endif
++    spi_flash_munmap(core_data_handle);
++
++    return ESP_OK;
++}
++
  esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size)
  {
      esp_err_t err;
 diff --git a/components/espcoredump/src/core_dump_port.c b/components/espcoredump/src/core_dump_port.c
-index 6641a9ae427..1f4f607ce8a 100644
+index e4fa5ca63a..3272bfd136 100644
 --- a/components/espcoredump/src/core_dump_port.c
 +++ b/components/espcoredump/src/core_dump_port.c
 @@ -18,6 +18,7 @@
@@ -398,7 +483,7 @@ index 6641a9ae427..1f4f607ce8a 100644
  
  const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_port";
  
-@@ -568,4 +569,90 @@ uint32_t esp_core_dump_get_extra_info(void **info)
+@@ -560,4 +561,90 @@ uint32_t esp_core_dump_get_extra_info(void **info)
      return sizeof(s_extra_info);
  }
  
