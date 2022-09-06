@@ -63,10 +63,14 @@
 #define ENABLE_INTERRUPTS  portEXIT_CRITICAL_NESTED
 #endif
 
-/* ESP-IDF v5.0 moved esp_cpu_process_stack_pc() is moved to esp_cpu_utils.h
+/* ESP-IDF v5.0 changed some existing APIs and moved some to other header files
  */
-#if (CONFIG_IDF_TARGET_ARCH_XTENSA && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0))
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#include <esp_app_desc.h>
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
 #include <esp_cpu_utils.h>
+#endif
 #endif
 
 esp_err_t esp_diag_device_info_get(esp_diag_device_info_t *device_info)
@@ -82,10 +86,15 @@ esp_err_t esp_diag_device_info_get(esp_diag_device_info_t *device_info)
     device_info->chip_model = chip.model;
     device_info->chip_rev = chip.revision;
     device_info->reset_reason = esp_reset_reason();
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    app_desc = esp_app_get_description();
+    esp_app_get_elf_sha256(device_info->app_elf_sha256, sizeof(device_info->app_elf_sha256));
+#else
     app_desc = esp_ota_get_app_description();
+    esp_ota_get_app_elf_sha256(device_info->app_elf_sha256, sizeof(device_info->app_elf_sha256));
+#endif
     strlcpy(device_info->app_version, app_desc->version, sizeof(device_info->app_version));
     strlcpy(device_info->project_name, app_desc->project_name, sizeof(device_info->project_name));
-    esp_ota_get_app_elf_sha256(device_info->app_elf_sha256, sizeof(device_info->app_elf_sha256));
     return ESP_OK;
 }
 
