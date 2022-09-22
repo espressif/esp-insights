@@ -73,12 +73,12 @@ size_t esp_insights_encode_meta(uint8_t *out_data, size_t out_data_size, char *s
     return len;
 }
 
-esp_err_t esp_insights_encode_data_begin(void *out_data, size_t out_data_size, char *sha256)
+esp_err_t esp_insights_encode_data_begin(void *out_data, size_t out_data_size)
 {
     if (!out_data || !out_data_size) {
         return ESP_ERR_INVALID_ARG;
     }
-    esp_insights_cbor_encode_diag_begin(out_data + TLV_OFFSET, out_data_size - TLV_OFFSET, INSIGHTS_META_VERSION, sha256);
+    esp_insights_cbor_encode_diag_begin(out_data + TLV_OFFSET, out_data_size - TLV_OFFSET, INSIGHTS_META_VERSION);
     esp_insights_cbor_encode_diag_data_begin();
     return ESP_OK;
 }
@@ -119,7 +119,7 @@ size_t esp_insights_encode_critical_data(const void *data, size_t data_size)
             uint8_t meta_idx = ((uint8_t *) data)[0];
             const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_by_index(meta_idx);
             if (hdr) {
-                esp_insights_cbor_encode_meta_hdr(hdr, "meta_c");
+                esp_insights_cbor_encode_meta_c_hdr(hdr);
             }
         }
     }
@@ -144,7 +144,7 @@ size_t esp_insights_encode_non_critical_data(const void *data, size_t data_size)
             uint8_t meta_idx = ((uint8_t *) data)[0];
             const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_by_index(meta_idx);
             if (hdr) {
-                esp_insights_cbor_encode_meta_hdr(hdr, "meta_nc");
+                esp_insights_cbor_encode_meta_nc_hdr(hdr);
             }
         }
 #endif

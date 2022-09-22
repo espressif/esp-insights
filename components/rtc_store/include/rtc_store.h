@@ -57,6 +57,13 @@ typedef struct {
 rtc_store_meta_header_t *rtc_store_get_meta_record_by_index(uint8_t idx);
 
 /**
+ * @brief   get current meta header
+ *
+ * @return rtc_store_meta_header_t*
+ */
+rtc_store_meta_header_t *rtc_store_get_meta_record_current();
+
+/**
  * @brief Non critical data header
  */
 typedef struct {

@@ -21,7 +21,7 @@
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 #include <rtc_store.h>
 
-void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version, const char *sha256);
+void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version);
 void esp_insights_cbor_encode_diag_data_begin(void);
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info);
 
@@ -31,7 +31,8 @@ void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info
  * @param hdr meta header which contains data regarding message it follows
  * @param type rtc_store type (viz., "critical", "non_critical")
  */
-void esp_insights_cbor_encode_meta_hdr(const rtc_store_meta_header_t *hdr, const char *type);
+void esp_insights_cbor_encode_meta_c_hdr(const rtc_store_meta_header_t *hdr);
+void esp_insights_cbor_encode_meta_nc_hdr(const rtc_store_meta_header_t *hdr);
 
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary);

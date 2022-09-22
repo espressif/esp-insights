@@ -490,6 +490,11 @@ rtc_store_meta_header_t *rtc_store_get_meta_record_by_index(uint8_t idx)
     return &s_rtc_store.meta[idx];
 }
 
+rtc_store_meta_header_t *rtc_store_get_meta_record_current()
+{
+    return &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
+}
+
 static inline uint8_t to_int_digit(unsigned val)
 {
     return (val <= '9') ? (val - '0') : (val - 'a' + 10);

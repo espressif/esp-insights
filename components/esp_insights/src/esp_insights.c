@@ -294,7 +294,7 @@ static void hex_dump(uint8_t *data, uint32_t len)
 static void send_boottime_data(void)
 {
     uint16_t len = 0;
-    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE);
     esp_insights_encode_boottime_data();
     len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
     if (len == 0) {
@@ -388,7 +388,7 @@ static void send_insights_data(void)
     }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE);
 
     critical_data_size = rtc_store_critical_data_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
     if (critical_data_size > 0) {

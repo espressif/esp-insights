@@ -31,7 +31,9 @@
 static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map;
 static CborEncoder s_meta_encoder, s_meta_result_map, s_diag_meta_map, s_diag_meta_data_map;
 
-void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version, const char *sha256)
+static inline void _cbor_encode_meta_hdr(CborEncoder *hdr_map, const rtc_store_meta_header_t *hdr);
+
+void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version)
 {
     cbor_encoder_init(&s_encoder, data, data_size, 0);
     cbor_encoder_create_map(&s_encoder, &s_result_map, 1);
@@ -44,8 +46,12 @@ void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const cha
     cbor_encode_text_stringz(&s_diag_map, "ts");
     cbor_encode_uint(&s_diag_map, esp_diag_timestamp_get());
 
-    cbor_encode_text_stringz(&s_diag_map, "sha256");
-    cbor_encode_text_stringz(&s_diag_map, sha256);
+    // cbor_encode_text_stringz(&s_diag_map, "sha256");
+    // cbor_encode_text_stringz(&s_diag_map, sha256);
+
+    // encode meta_data
+    const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_current();
+    _cbor_encode_meta_hdr(&s_diag_map, hdr);
 }
 
 size_t esp_insights_cbor_encode_diag_end(void *data)
@@ -156,31 +162,6 @@ void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary)
 }
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 
-void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info)
-{
-    CborEncoder boot_map;
-    cbor_encode_text_stringz(&s_diag_data_map, "boot");
-    cbor_encoder_create_map(&s_diag_data_map, &boot_map, CborIndefiniteLength);
-
-    /* xTaskGetTickCount() API returns count of ticks since start of scheduler
-     * For boot timestamp, we subtract the ticks since boot to get closest timestamp to bootup
-     */
-    cbor_encode_text_stringz(&boot_map, "ts");
-    cbor_encode_uint(&boot_map, esp_diag_timestamp_get() - (uint64_t)(pdTICKS_TO_MS(xTaskGetTickCount()) * 1000));
-
-    cbor_encode_text_stringz(&boot_map, "chip");
-    cbor_encode_uint(&boot_map, device_info->chip_model);
-    cbor_encode_text_stringz(&boot_map, "chip_rev");
-    cbor_encode_uint(&boot_map, device_info->chip_rev);
-    cbor_encode_text_stringz(&boot_map, "reason");
-    cbor_encode_uint(&boot_map, device_info->reset_reason);
-    cbor_encode_text_stringz(&boot_map, "proj");
-    cbor_encode_text_stringz(&boot_map, device_info->project_name);
-    cbor_encode_text_stringz(&boot_map, "app_ver");
-    cbor_encode_text_stringz(&boot_map, device_info->app_version);
-    cbor_encoder_close_container(&s_diag_data_map, &boot_map);
-}
-
 // use a scratch_pad to memcpy data before access
 // this avoids `potential` unaligned memory accesses as
 // data pointer we receive is not guaranteed to be word aligned
@@ -207,20 +188,73 @@ static void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len)
     dst[2 * in_len] = 0;
 }
 
-void esp_insights_cbor_encode_meta_hdr(const rtc_store_meta_header_t *hdr, const char *type)
+static inline void _cbor_encode_meta_hdr(CborEncoder *hdr_map, const rtc_store_meta_header_t *hdr)
+{
+    cbor_encode_text_stringz(hdr_map, "sha256");
+    bytes_to_hex((uint8_t *) hdr->sha_sum, (uint8_t *) enc_scratch_buf.sha_sum, SHA_SIZE); // expand uint8 packed data to hex
+    cbor_encode_text_stringz(hdr_map, enc_scratch_buf.sha_sum);
+    cbor_encode_text_stringz(hdr_map, "gen_id");
+    cbor_encode_uint(hdr_map, hdr->gen_id);
+    cbor_encode_text_stringz(hdr_map, "boot_cnt");
+    cbor_encode_uint(hdr_map, hdr->boot_cnt);
+}
+
+void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info)
+{
+    CborEncoder boot_map;
+    cbor_encode_text_stringz(&s_diag_data_map, "boot");
+    cbor_encoder_create_map(&s_diag_data_map, &boot_map, CborIndefiniteLength);
+
+    /* xTaskGetTickCount() API returns count of ticks since start of scheduler
+     * For boot timestamp, we subtract the ticks since boot to get closest timestamp to bootup
+     */
+    cbor_encode_text_stringz(&boot_map, "ts");
+    cbor_encode_uint(&boot_map, esp_diag_timestamp_get() - (uint64_t)(pdTICKS_TO_MS(xTaskGetTickCount()) * 1000));
+
+    cbor_encode_text_stringz(&boot_map, "chip");
+    cbor_encode_uint(&boot_map, device_info->chip_model);
+    cbor_encode_text_stringz(&boot_map, "chip_rev");
+    cbor_encode_uint(&boot_map, device_info->chip_rev);
+    cbor_encode_text_stringz(&boot_map, "reason");
+    cbor_encode_uint(&boot_map, device_info->reset_reason);
+    cbor_encode_text_stringz(&boot_map, "proj");
+    cbor_encode_text_stringz(&boot_map, device_info->project_name);
+    cbor_encode_text_stringz(&boot_map, "app_ver");
+    cbor_encode_text_stringz(&boot_map, device_info->app_version);
+
+    cbor_encoder_close_container(&s_diag_data_map, &boot_map);
+}
+
+void esp_insights_cbor_encode_meta_c_hdr(const rtc_store_meta_header_t *hdr)
 {
     CborEncoder hdr_map;
-    cbor_encode_text_stringz(&s_diag_data_map, type);
+    cbor_encode_text_stringz(&s_diag_data_map, "meta_c");
     cbor_encoder_create_map(&s_diag_data_map, &hdr_map, CborIndefiniteLength);
 
-    cbor_encode_text_stringz(&hdr_map, "sha256");
-    bytes_to_hex((uint8_t *) hdr->sha_sum, (uint8_t *) enc_scratch_buf.sha_sum, SHA_SIZE); // expand uint8 packed data to hex
-    cbor_encode_text_stringz(&hdr_map, enc_scratch_buf.sha_sum);
-    cbor_encode_text_stringz(&hdr_map, "gen_id");
-    cbor_encode_uint(&hdr_map, hdr->gen_id);
-    cbor_encode_text_stringz(&hdr_map, "boot_cnt");
-    cbor_encode_uint(&hdr_map, hdr->boot_cnt);
+    CborEncoder map_list;
+    cbor_encode_text_stringz(&hdr_map, "maps_to");
+    cbor_encoder_create_array(&hdr_map, &map_list, CborIndefiniteLength);
+    cbor_encode_text_stringz(&map_list, "traces");
+    cbor_encoder_close_container(&hdr_map, &map_list);
 
+    _cbor_encode_meta_hdr(&hdr_map, hdr);
+    cbor_encoder_close_container(&s_diag_data_map, &hdr_map);
+}
+
+void esp_insights_cbor_encode_meta_nc_hdr(const rtc_store_meta_header_t *hdr)
+{
+    CborEncoder hdr_map;
+    cbor_encode_text_stringz(&s_diag_data_map, "meta_nc");
+    cbor_encoder_create_map(&s_diag_data_map, &hdr_map, CborIndefiniteLength);
+
+    CborEncoder map_list;
+    cbor_encode_text_stringz(&hdr_map, "maps_to");
+    cbor_encoder_create_array(&hdr_map, &map_list, CborIndefiniteLength);
+    cbor_encode_text_stringz(&map_list, "metrics");
+    cbor_encode_text_stringz(&map_list, "params");
+    cbor_encoder_close_container(&hdr_map, &map_list);
+
+    _cbor_encode_meta_hdr(&hdr_map, hdr);
     cbor_encoder_close_container(&s_diag_data_map, &hdr_map);
 }
 
