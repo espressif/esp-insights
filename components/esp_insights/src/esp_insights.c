@@ -112,7 +112,7 @@ static bool is_insights_active(void)
 {
     wifi_ap_record_t ap_info;
     bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
-    return wifi_connected && s_insights_data.init_done;
+    return wifi_connected && s_insights_data.data_lock;
 }
 
 /* This executes in the context of timer task.
