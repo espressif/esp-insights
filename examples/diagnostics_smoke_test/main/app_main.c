@@ -12,6 +12,7 @@
 #include "esp_insights.h"
 #include "esp_rmaker_utils.h"
 #include "app_wifi.h"
+#include "esp_wifi.h"
 #include "esp_diagnostics_system_metrics.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -49,6 +50,12 @@ static void smoke_test(void *arg)
     bool allocating = false;
 
     while (1) {
+        if (count == 5) {
+            esp_wifi_disconnect();
+        }
+        if (count == 8) {
+            esp_wifi_connect();
+        }
         dice = esp_random() % 500;
         ESP_LOGI(TAG, "dice=%d", dice);
         if (dice > 0 && dice < 150) {
