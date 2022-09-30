@@ -9,6 +9,14 @@ menu "ESP Insights"
         bool "Enable Insights debug prints"
         default n
 
+    config ESP_INSIGHTS_DEBUG_PRINT_JSON
+        depends on ESP_INSIGHTS_DEBUG_ENABLED
+        bool "Dump CBOR decoded data instead of hexdump"
+        default y
+        help
+            Print pretty format json data for cbor messages
+            If this option is not enabled, hexdump will be presented instead of json data
+
     config ESP_INSIGHTS_COREDUMP_ENABLE
         bool "Enable core dump summary support"
         default y

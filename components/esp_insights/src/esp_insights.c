@@ -32,6 +32,7 @@
 
 #include "esp_insights_client_data.h"
 #include "esp_insights_encoder.h"
+#include "esp_insights_cbor_decoder.h"
 
 #include <esp_idf_version.h>
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
@@ -291,6 +292,7 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
 }
 
 #if INSIGHTS_DEBUG_ENABLED
+#ifndef CONFIG_ESP_INSIGHTS_DEBUG_PRINT_JSON
 static void hex_dump(uint8_t *data, uint32_t len)
 {
     int index;
@@ -301,6 +303,16 @@ static void hex_dump(uint8_t *data, uint32_t len)
         printf("0x%02x ", s_insights_data.scratch_buf[index]);
     }
     printf("\n");
+}
+#endif
+
+static void insights_dbg_dump(uint8_t *data, uint32_t len)
+{
+#if CONFIG_ESP_INSIGHTS_DEBUG_PRINT_JSON
+    esp_insights_cbor_decode_dump((const uint8_t *) (s_insights_data.scratch_buf + 3), len - 3);
+#else
+    hex_dump(data, len);
+#endif
 }
 #endif /* INSIGHTS_DEBUG_ENABLED */
 
@@ -316,7 +328,7 @@ static void send_boottime_data(void)
     }
 #if INSIGHTS_DEBUG_ENABLED
     ESP_LOGI(TAG, "Sending boottime data of length: %d", len);
-    hex_dump(s_insights_data.scratch_buf, len);
+    insights_dbg_dump(s_insights_data.scratch_buf, len);
 #endif
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
     s_insights_data.boot_msg_id = msg_id;
@@ -363,7 +375,7 @@ static void send_insights_meta(void)
     }
 #if INSIGHTS_DEBUG_ENABLED
     ESP_LOGI(TAG, "Insights meta data length %d", len);
-    hex_dump(s_insights_data.scratch_buf, len);
+    insights_dbg_dump(s_insights_data.scratch_buf, len);
 #endif
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
     if (msg_id > 0) {
@@ -434,7 +446,7 @@ static void send_insights_data(void)
     }
 #if INSIGHTS_DEBUG_ENABLED
     ESP_LOGI(TAG, "Sending data of length: %d", len);
-    hex_dump(s_insights_data.scratch_buf, len);
+    insights_dbg_dump(s_insights_data.scratch_buf, len);
 #endif
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
     if (msg_id > 0) {
