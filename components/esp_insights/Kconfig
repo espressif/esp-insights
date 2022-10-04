@@ -41,6 +41,16 @@ menu "ESP Insights"
 
     endchoice
 
+    config ESP_INSIGHTS_CMD_RESP_ENABLED
+        depends on (ESP_INSIGHTS_ENABLED && ESP_INSIGHTS_TRANSPORT_MQTT)
+        bool "Enable command response module"
+        default n
+        help
+            Enabling this option adds control of certain insights options remotely.
+            When enabled, the available configurations, should be shown on the dashboard
+            and controllable from there.
+            Please note, the feature is only available with RainMaker MQTT nodes for now.
+
     config ESP_INSIGHTS_TRANSPORT_HTTPS_HOST
         depends on ESP_INSIGHTS_TRANSPORT_HTTPS
         string "Insights https host"

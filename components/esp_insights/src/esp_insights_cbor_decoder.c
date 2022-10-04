@@ -11,6 +11,7 @@
 #include <esp_rmaker_utils.h>
 
 #include <cbor.h>
+#include "esp_insights_cbor_decoder.h"
 
 static const char *TAG = "insight_cbor_dec";
 
@@ -280,4 +281,102 @@ esp_err_t esp_insights_cbor_decode_dump(const uint8_t *buffer, int len)
     }
 
     return ESP_OK;
+}
+
+bool esp_insights_cbor_decoder_at_end(cbor_parse_ctx_t *ctx)
+{
+    return cbor_value_at_end(&ctx->it[ctx->curr_itr]);
+}
+
+esp_err_t esp_insights_cbor_decoder_advance(cbor_parse_ctx_t *ctx)
+{
+    if (CborNoError == cbor_value_advance(&ctx->it[ctx->curr_itr])) {
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
+CborType esp_insights_cbor_decode_get_value_type(cbor_parse_ctx_t *ctx)
+{
+    return cbor_value_get_type(&ctx->it[ctx->curr_itr]);
+}
+
+char *esp_insights_cbor_decoder_get_string(CborValue *val)
+{
+    CborError ret = CborNoError;
+    char *buf = NULL;
+    size_t n;
+    if (cbor_value_get_type(val) != CborTextStringType) {
+        return NULL;
+    }
+    ret = cbor_value_dup_text_string(val, &buf, &n, val);
+    if (ret == CborNoError) {
+        return (char *) buf;
+    }
+    return NULL;
+}
+
+esp_err_t esp_insights_cbor_decoder_enter_container(cbor_parse_ctx_t *ctx)
+{
+    CborError ret = CborNoError;
+    int curr_itr = ctx->curr_itr;
+    if (curr_itr >= INS_CBOR_MAX_DEPTH) {
+        ESP_LOGE(TAG, "Cannot parse depth more than %d", INS_CBOR_MAX_DEPTH);
+        return ESP_FAIL;
+    }
+    ret = cbor_value_enter_container(&ctx->it[curr_itr], &ctx->it[curr_itr + 1]);
+    if (ret != CborNoError) {
+        ESP_LOGE(TAG, "error entering container");
+        return ESP_FAIL;
+    }
+    if (esp_insights_cbor_decoder_at_end(ctx)) {
+        return ESP_FAIL;
+    }
+    ctx->curr_itr++;
+
+    return ESP_OK;
+}
+
+esp_err_t esp_insights_cbor_decoder_exit_container(cbor_parse_ctx_t *ctx)
+{
+    CborError ret = CborNoError;
+    if (ctx->curr_itr <= 0) {
+        ESP_LOGE(TAG, "cannot exit, already at top");
+        return ESP_FAIL;
+    }
+    ctx->curr_itr--;
+    int curr_itr = ctx->curr_itr;
+    ret = cbor_value_leave_container(&ctx->it[curr_itr], &ctx->it[curr_itr + 1]);
+    if (ret != CborNoError) {
+        ESP_LOGE(TAG, "error leaving container");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+esp_err_t esp_insights_cbor_decoder_done(cbor_parse_ctx_t *ctx)
+{
+    if (ctx) {
+        free(ctx);
+    }
+    return ESP_OK;
+}
+
+cbor_parse_ctx_t *esp_insights_cbor_decoder_start(const uint8_t *buffer, int len)
+{
+    if (!buffer || len == 0) {
+        return NULL;
+    }
+    cbor_parse_ctx_t *ctx = calloc(1, sizeof(cbor_parse_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "failed to allocate cbor ctx");
+        return NULL;
+    }
+    CborParser root_parser = ctx->root_parser;
+    CborValue *it = &ctx->it[0];
+    if (cbor_parser_init(buffer, len, 0, &root_parser, it) != CborNoError) {
+        ESP_LOGE(TAG, "Error initializing cbor parser");
+        return NULL;
+    }
+    return ctx;
 }

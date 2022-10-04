@@ -5,6 +5,7 @@
  */
 
 #pragma once
+
 #include <stdint.h>
 #include <esp_err.h>
 #include <esp_event_base.h>
@@ -200,6 +201,28 @@ void esp_insights_disable(void);
  * @return Pointer to a NULL terminated Node ID string.
  */
 const char *esp_insights_get_node_id(void);
+
+/**
+ * @brief Encode and parse the command directly using esp-insight's parser
+ *
+ * This tests only if the parser is working as expected.
+ */
+esp_err_t esp_insights_test_cmd_handler();
+
+/**
+ * @brief Enable esp-insights command-response module
+ *
+ * This API registers esp-insights command parser which when data is received,
+ * parses it to filter out insights specific data, modifies configs accordingly,
+ * and prepares and gives response data to the module
+ *
+ * The \ref esp_insights_init takes care of initializing command response and
+ * enabling the same. In cases where, only esp_insights_enable is called, e.g.,
+ * ESP Rainmaker's app_insights module, user needs to call this API, before or
+ * after \ref esp_insights_enable
+ */
+esp_err_t esp_insights_cmd_resp_enable(void);
+
 #ifdef __cplusplus
 }
 #endif

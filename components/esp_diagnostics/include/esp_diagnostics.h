@@ -103,6 +103,7 @@ typedef enum {
     ESP_DIAG_DATA_TYPE_STR,      /*!< Data type string */
     ESP_DIAG_DATA_TYPE_IPv4,     /*!< Data type IPv4 address */
     ESP_DIAG_DATA_TYPE_MAC,      /*!< Data type MAC address */
+    ESP_DIAG_DATA_TYPE_INVALID,  /*!< Not supported by diagnostics */
 } esp_diag_data_type_t;
 
 /**

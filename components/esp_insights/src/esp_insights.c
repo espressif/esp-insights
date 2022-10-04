@@ -60,6 +60,7 @@
 
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 
+/* TAG for reporting generic miscellaneous insights. Different from ESP_LOGx tag */
 #define TAG_DIAG            "diag"
 #define KEY_LOG_WR_FAIL     "log_wr_fail"
 
@@ -104,6 +105,8 @@ typedef struct {
 static const char *TAG = "esp_insights";
 static esp_insights_data_t s_insights_data;
 static esp_insights_entry_t *s_periodic_insights_entry;
+
+extern esp_err_t esp_insights_cmd_resp_init(void);
 
 static void esp_insights_first_call(void *priv_data)
 {
@@ -927,6 +930,11 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
     }
 
     s_insights_data.init_done = true;
+
+    err = esp_insights_cmd_resp_init() || esp_insights_cmd_resp_enable();
+    if (err != ESP_OK) { /* device can keep working neverthless */
+        ESP_LOGE(TAG, "Failed to enable insights_cmd_resp");
+    }
     return ESP_OK;
 init_err:
     if (s_insights_data.node_id) {
