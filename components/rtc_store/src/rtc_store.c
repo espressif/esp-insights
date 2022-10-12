@@ -56,15 +56,18 @@
 ESP_EVENT_DEFINE_BASE(RTC_STORE_EVENT);
 
 // Assumption is RTC memory size will never exeed UINT16_MAX
-typedef struct {
-    uint16_t read_offset;
-    uint16_t filled;
+typedef union {
+    struct {
+        uint16_t read_offset;
+        uint16_t filled;
+    };
+    uint32_t value;
 } data_store_info_t;
 
 typedef struct {
     uint8_t *buf;
     size_t size;
-    uint32_t info; /* to access, typecast this to data_store_info_t */
+    data_store_info_t info;
 } data_store_t;
 
 typedef struct {
@@ -117,14 +120,15 @@ static inline size_t data_store_get_filled(data_store_t *store)
 
 static void rtc_store_read_complete(rbuf_data_t *rbuf_data, size_t len)
 {
-    uint32_t info = rbuf_data->store->info;
-
+    data_store_info_t info =  {
+        .value = rbuf_data->store->info.value,
+    };
     // modify new pointers
-    ((data_store_info_t *) &info)->filled -= len;
-    ((data_store_info_t *) &info)->read_offset += len;
+    info.filled -= len;
+    info.read_offset += len;
 
     // commit modifications
-    rbuf_data->store->info = info;
+    rbuf_data->store->info.value = info.value;
 }
 
 static void rtc_store_write_complete(rbuf_data_t *rbuf_data, size_t len)
@@ -413,7 +417,7 @@ static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
     if (rtc_store_integrity_check(rtc_store) == false) {
         // discard all the existing data
         printf("%s: intergrity_check failed, discarding old data...\n", "rtc_store");
-        rtc_store->info = 0;
+        rtc_store->info.value = 0;
     }
     return ESP_OK;
 }
