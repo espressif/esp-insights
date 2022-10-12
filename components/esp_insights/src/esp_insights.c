@@ -498,7 +498,7 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
         case RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
             s_insights_data.log_write_fail_cnt++;
 #if INSIGHTS_DEBUG_ENABLED
-            ESP_LOGI(TAG, "Log write fail count: %d", s_insights_data.log_write_fail_cnt);
+            ESP_LOGI(TAG, "Log write fail count: %"PRIu32, s_insights_data.log_write_fail_cnt);
 #endif
             break;
 
