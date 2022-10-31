@@ -20,8 +20,14 @@ set(partition_bin_file_path ${BUILD_DIR}/partition_table/partition-table.bin)
 set(partition_csv_file_path ${PROJECT_DIR}/${PARTITION_CSV_FILE})
 # Set bootloader binary file path
 set(bootloader_bin_file_path ${BUILD_DIR}/bootloader/bootloader.bin)
+# Set ota data initial binary file path
+set(ota_data_bin_file_path ${BUILD_DIR}/ota_data_initial.bin)
+# Set flash args file path
+set(flash_args_file_path ${BUILD_DIR}/flash_args)
 # Set project build config file path
 set(proj_desc_file_path ${BUILD_DIR}/project_description.json)
+# Set custom project build config file path
+set(custom_proj_desc_file_path ${BUILD_DIR}/project_description_custom.json)
 
 # Create archive directory
 file(MAKE_DIRECTORY ${BUILD_DIR}/${ARCHIVE_DIR})
@@ -67,7 +73,22 @@ if(EXISTS ${bootloader_bin_file_path})
     file(COPY ${bootloader_bin_file_path} DESTINATION ${BUILD_DIR}/${ARCHIVE_DIR}/bootloader)
 endif()
 
+# Copy ota_data_initial bin file to archive directory
+if(EXISTS ${ota_data_bin_file_path})
+    file(COPY ${ota_data_bin_file_path} DESTINATION ${BUILD_DIR}/${ARCHIVE_DIR})
+endif()
+
+# Copy flash args file to archive directory
+if(EXISTS ${flash_args_file_path})
+    file(COPY ${flash_args_file_path} DESTINATION ${BUILD_DIR}/${ARCHIVE_DIR})
+endif()
+
 # Copy project description json file to archive directory
 if (EXISTS ${proj_desc_file_path})
     file(COPY ${proj_desc_file_path} DESTINATION ${BUILD_DIR}/${ARCHIVE_DIR}/)
+endif()
+
+# Copy custom project description json file to archive directory
+if (EXISTS ${custom_proj_desc_file_path})
+    file(COPY ${custom_proj_desc_file_path} DESTINATION ${BUILD_DIR}/${ARCHIVE_DIR}/)
 endif()
