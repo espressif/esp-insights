@@ -248,7 +248,7 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     while (data_store_get_free(s_priv_data.non_critical.store) < req_free) {
         uint8_t *read_ptr = s_priv_data.non_critical.store->buf + info->read_offset;
         memcpy(&header, read_ptr, sizeof(header));
-        rtc_store_read_complete(s_priv_data.non_critical, sizeof(header) + header.len);
+        rtc_store_read_complete(&s_priv_data.non_critical, sizeof(header) + header.len);
     }
 #else // just check if we have enough space to write the item
     curr_free = data_store_get_free(s_priv_data.non_critical.store);
