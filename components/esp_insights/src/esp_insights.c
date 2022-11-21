@@ -759,12 +759,6 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
     s_insights_data.boot_msg_id = -1;
-    err = esp_insights_register_periodic_handler(insights_periodic_handler,
-                CLOUD_REPORTING_PERIOD_MIN_SEC, CLOUD_REPORTING_PERIOD_MAX_SEC, NULL);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register insights_periodic_handler.");
-        goto enable_err;
-    }
     s_insights_data.data_send_timer = xTimerCreate("data_send_timer", CLOUD_REPORTING_TIMEOUT_TICKS,
                                                    pdFALSE, NULL, data_send_timeout_cb);
     if (!s_insights_data.data_send_timer) {
@@ -772,6 +766,14 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
         err = ESP_ERR_NO_MEM;
         goto enable_err;
     }
+
+    err = esp_insights_register_periodic_handler(insights_periodic_handler,
+                CLOUD_REPORTING_PERIOD_MIN_SEC, CLOUD_REPORTING_PERIOD_MAX_SEC, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register insights_periodic_handler.");
+        goto enable_err;
+    }
+
     ESP_LOGI(TAG, "=========================================");
     ESP_LOGI(TAG, "Insights enabled for Node ID %s", s_insights_data.node_id);
     ESP_LOGI(TAG, "=========================================");
