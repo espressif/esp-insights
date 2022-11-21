@@ -243,18 +243,17 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                     rtc_store_critical_data_release(s_insights_data.data_msg_len);
                     s_insights_data.data_sent = true;
                     s_insights_data.data_send_inprogress = false;
-                    if (s_insights_data.boot_msg_id > 0 && s_insights_data.boot_msg_id == data->msg_id) {
-#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
-                        esp_core_dump_image_erase();
-#endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
-                        s_insights_data.boot_msg_id = 0;
-                    }
 #if SEND_INSIGHTS_META
                 } else if (s_insights_data.meta_msg_pending && data->msg_id == s_insights_data.meta_msg_id) {
                     esp_insights_meta_nvs_crc_set(s_insights_data.meta_crc);
                     s_insights_data.meta_msg_pending = false;
                     s_insights_data.data_sent = true;
 #endif /* SEND_INSIGHTS_META */
+                } else if (s_insights_data.boot_msg_id > 0 && s_insights_data.boot_msg_id == data->msg_id) {
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+                    esp_core_dump_image_erase();
+#endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+                    s_insights_data.boot_msg_id = 0;
                 }
                 xSemaphoreGive(s_insights_data.data_lock);
             }
@@ -288,6 +287,31 @@ static void hex_dump(uint8_t *data, uint32_t len)
     printf("\n");
 }
 #endif /* INSIGHTS_DEBUG_ENABLED */
+
+static void send_boottime_data(void)
+{
+    uint16_t len = 0;
+    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+    esp_insights_encode_boottime_data();
+    len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
+    if (len == 0) {
+        ESP_LOGE(TAG, "No boottime data to send");
+        s_insights_data.boot_msg_id = 0; // mark it sent
+    }
+#if INSIGHTS_DEBUG_ENABLED
+    ESP_LOGI(TAG, "Sending boottime data of length: %d", len);
+    hex_dump(s_insights_data.scratch_buf, len);
+#endif
+    int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
+    s_insights_data.boot_msg_id = msg_id;
+    if (msg_id > 0) {
+        return;
+    } else if (msg_id == 0) {
+#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+        esp_core_dump_image_erase();
+#endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+    }
+}
 
 #if SEND_INSIGHTS_META
 /* Returns true if ESP Insights metadata CRC is changed */
@@ -361,48 +385,27 @@ static void send_insights_data(void)
     }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-    // If encoding first message
-    if (s_insights_data.boot_msg_id == -1) {
+    /* If any ESP_LOGE, ESP_LOGW is added in between rtc_store_critical_data_read_and_lock()
+        * and rtc_store_critical_data_release_and_unlock(), system will be deadlocked.
+        * So, encode boottime data before acquiring the data store lock,
+        * Becuase, esp_insights_encode_boottime_data() calls esp_core_dump_image_check() which contain few error logs
+        */
+    critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
+    non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
+
+    if (critical_data || non_critical_data) {
         esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
-
-        /* If any ESP_LOGE, ESP_LOGW is added in between rtc_store_critical_data_read_and_lock()
-         * and rtc_store_critical_data_release_and_unlock(), system will be deadlocked.
-         * So, encode boottime data before acquiring the data store lock,
-         * Becuase, esp_insights_encode_boottime_data() calls esp_core_dump_image_check() which contain few error logs
-         */
-        esp_insights_encode_boottime_data();
-
-        critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
-        if (critical_data) {
-            esp_insights_encode_critical_data(critical_data, critical_data_size);
-            rtc_store_critical_data_release_and_unlock(0);
-        }
-
-        non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
-        if (non_critical_data) {
-            esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
-            /* Remove all the non critical data after encoding */
-            rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
-        }
+    }
+    if (critical_data) {
+        esp_insights_encode_critical_data(critical_data, critical_data_size);
+        rtc_store_critical_data_release_and_unlock(0);
+    }
+    if (non_critical_data) {
+        esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
+        rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
+    }
+    if (critical_data || non_critical_data) {
         len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
-    } else {
-        critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
-        non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
-
-        if (critical_data || non_critical_data) {
-            esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
-        }
-        if (critical_data) {
-            esp_insights_encode_critical_data(critical_data, critical_data_size);
-            rtc_store_critical_data_release_and_unlock(0);
-        }
-        if (non_critical_data) {
-            esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
-            rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
-        }
-        if (critical_data || non_critical_data) {
-            len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
-        }
     }
 
     if (len == 0) {
@@ -420,21 +423,12 @@ static void send_insights_data(void)
         xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
         s_insights_data.data_msg_len = critical_data_size;
         s_insights_data.data_msg_id = msg_id;
-        if (s_insights_data.boot_msg_id == -1) {
-            s_insights_data.boot_msg_id = msg_id;
-        }
         xTimerReset(s_insights_data.data_send_timer, portMAX_DELAY);
         xSemaphoreGive(s_insights_data.data_lock);
         return;
     } else if (msg_id == 0) {
         rtc_store_critical_data_release(critical_data_size);
         s_insights_data.data_sent = true;
-        if (s_insights_data.boot_msg_id == -1) {
-#if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
-            esp_core_dump_image_erase();
-#endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
-            s_insights_data.boot_msg_id = 0;
-        }
     }
 data_send_end:
     xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
@@ -462,6 +456,9 @@ static void insights_periodic_handler(void *priv_data)
         send_insights_meta();
     }
 #endif /* SEND_INSIGHTS_META */
+    if (s_insights_data.boot_msg_id == -1) {
+        send_boottime_data();
+    }
     send_insights_data();
 }
 
