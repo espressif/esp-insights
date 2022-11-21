@@ -24,6 +24,8 @@
 #define METRICS_TAG        "wifi"
 #define KEY_RSSI           "rssi"
 #define KEY_MIN_RSSI       "min_rssi_ever"
+#define KEY_STATUS         "conn_status"
+
 #define PATH_WIFI_STATION  "Wi-Fi.Station"
 
 #define DEFAULT_POLLING_INTERVAL 30   /* 30 seconds */
@@ -32,6 +34,8 @@
 
 typedef struct {
     bool init;
+    bool wifi_connected;
+    bool status_sent;
     uint32_t period;
     TimerHandle_t handle;
     int32_t prev_rssi;
@@ -52,24 +56,41 @@ static void update_min_rssi(int32_t rssi)
     }
 }
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
-
 static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, void *evt_data)
 {
-    if (evt_base == WIFI_EVENT) {
-        switch (evt_id) {
-            case WIFI_EVENT_STA_BSS_RSSI_LOW:
-            {
-                wifi_event_bss_rssi_low_t *data = evt_data;
-                update_min_rssi(data->rssi);
-                break;
-            }
-            default:
-                break;
+    switch (evt_id) {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
+        case WIFI_EVENT_STA_BSS_RSSI_LOW:
+        {
+            wifi_event_bss_rssi_low_t *data = evt_data;
+            update_min_rssi(data->rssi);
         }
+        break;
+#endif /* ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)  */
+        case WIFI_EVENT_STA_CONNECTED:
+        {
+            s_priv_data.wifi_connected = true;
+            s_priv_data.status_sent = false;
+            if (esp_diag_metrics_add_bool(KEY_STATUS, 1) == ESP_OK) {
+                s_priv_data.status_sent = true;
+            }
+            break;
+        }
+        case WIFI_EVENT_STA_DISCONNECTED:
+        {
+            if (s_priv_data.wifi_connected) {
+                s_priv_data.wifi_connected = false;
+                s_priv_data.status_sent = false;
+                if (esp_diag_metrics_add_bool(KEY_STATUS, 0) == ESP_OK) {
+                    s_priv_data.status_sent = true;
+                }
+            }
+            break;
+        }
+        default:
+        break;
     }
 }
-#endif /* ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)  */
 
 /* This function returns 1 on failure otherwise valid RSSI */
 static int32_t get_rssi(void)
@@ -97,6 +118,12 @@ esp_err_t esp_diag_wifi_metrics_dump(void)
         s_priv_data.prev_rssi = rssi;
         ESP_LOGI(LOG_TAG, "%s:%"PRIi32" %s:%"PRIi32"", KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
+    if (!s_priv_data.status_sent) {
+        // if for some reason we were not able to add the status, try again
+        if (esp_diag_metrics_add_bool(KEY_STATUS, s_priv_data.wifi_connected) == ESP_OK) {
+            s_priv_data.status_sent = true;
+        }
+    }
     return ESP_OK;
 }
 
@@ -110,12 +137,12 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     if (s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
     /* Register the event handler for wifi events */
     esp_err_t err = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt_handler, NULL);
     if (err != ESP_OK) {
         return err;
     }
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
     err = esp_wifi_set_rssi_threshold(WIFI_RSSI_THRESHOLD);
     if (err != ESP_OK) {
         ESP_LOGW(LOG_TAG, "Failed to set rssi threshold value");
@@ -123,6 +150,7 @@ esp_err_t esp_diag_wifi_metrics_init(void)
 #endif
     esp_diag_metrics_register(METRICS_TAG, KEY_RSSI, "Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
     esp_diag_metrics_register(METRICS_TAG, KEY_MIN_RSSI, "Minimum ever Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
+    esp_diag_metrics_register(METRICS_TAG, KEY_STATUS, "Wi-Fi connect status", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_BOOL);
 
     s_priv_data.min_rssi = WIFI_RSSI_THRESHOLD;
     s_priv_data.handle = xTimerCreate("wifi_metrics", SEC2TICKS(DEFAULT_POLLING_INTERVAL),
@@ -141,15 +169,14 @@ esp_err_t esp_diag_wifi_metrics_deinit(void)
     if (!s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
     esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_evt_handler);
-#endif
     /* Try to delete timer with 10 ticks wait time */
     if (xTimerDelete(s_priv_data.handle, 10) == pdFALSE) {
         ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
     }
     esp_diag_metrics_unregister(KEY_RSSI);
     esp_diag_metrics_unregister(KEY_MIN_RSSI);
+    esp_diag_metrics_unregister(KEY_STATUS);
     memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }
