@@ -89,7 +89,8 @@ typedef struct {
     TimerHandle_t data_send_timer; /* timer to reset data_send_inprogress flag on timeout */
     char *node_id;
     int boot_msg_id;   /* To track whether first message is sent or not, -1:failed, 0:success, >0:inprogress */
-    bool init_done;      /* true if insights is enabled */
+    bool init_done;     /* insights init done */
+    bool enabled;       /* insights enable is done */
 } esp_insights_data_t;
 
 #ifdef CONFIG_ESP_INSIGHTS_ENABLED
@@ -115,7 +116,7 @@ static bool is_insights_active(void)
 {
     wifi_ap_record_t ap_info;
     bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
-    return wifi_connected && s_insights_data.data_lock;
+    return wifi_connected && s_insights_data.enabled;
 }
 
 /* This executes in the context of timer task.
@@ -184,17 +185,19 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
                                                         void *priv_data)
 {
     if (s_periodic_insights_entry) {
-        ESP_LOGD(TAG, "s_periodic_insights_entry already registered");
+        ESP_LOGI(TAG, "s_periodic_insights_entry already registered");
         return ESP_OK;
     }
 
     if (!work_fn || (min_seconds == 0) || (max_seconds == 0)) {
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "invalid params register_periodic_handler");
+        return ESP_ERR_INVALID_ARG;
     }
 
     s_periodic_insights_entry = calloc (1, sizeof(esp_insights_entry_t));
     if (!s_periodic_insights_entry) {
-        return ESP_FAIL;
+        ESP_LOGI(TAG, "allocation failed, line %d", __LINE__);
+        return ESP_ERR_NO_MEM;
     }
     s_periodic_insights_entry->work_fn = work_fn;
     s_periodic_insights_entry->priv_data = priv_data;
@@ -204,6 +207,7 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
     s_periodic_insights_entry->timer = xTimerCreate("test", (s_periodic_insights_entry->cur_seconds * 1000)/ portTICK_PERIOD_MS,
                                                     pdFALSE, (void *)s_periodic_insights_entry, esp_insights_common_cb);
     if (!s_periodic_insights_entry->timer) {
+        ESP_LOGI(TAG, "timer creation failed, line %d", __LINE__);
         free(s_periodic_insights_entry);
         return ESP_FAIL;
     }
@@ -211,7 +215,11 @@ static esp_err_t esp_insights_register_periodic_handler(esp_rmaker_work_fn_t wor
      * esp_insights_first_call() will be executed after MQTT connection is established.
      * It add the work_fn to the queue and start the periodic timer.
      */
-    return esp_rmaker_work_queue_add_task(esp_insights_first_call, s_periodic_insights_entry);
+    esp_err_t ret = esp_rmaker_work_queue_add_task(esp_insights_first_call, s_periodic_insights_entry);
+    if (ret != ESP_OK) {
+        ESP_LOGI(TAG, "failed to enqueue insights_first_call, line %d", __LINE__);
+    }
+    return ret;
 }
 
 static void data_send_timeout_cb(TimerHandle_t handle)
@@ -618,6 +626,8 @@ static void variables_deinit(void)
 
 void esp_insights_disable(void)
 {
+    s_insights_data.enabled = false;
+
     esp_insights_unregister_periodic_handler();
 #ifdef CONFIG_DIAG_ENABLE_VARIABLES
     variables_deinit();
@@ -792,6 +802,8 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to register insights_periodic_handler.");
         goto enable_err;
     }
+
+    s_insights_data.enabled = true;
 
     ESP_LOGI(TAG, "=========================================");
     ESP_LOGI(TAG, "Insights enabled for Node ID %s", s_insights_data.node_id);
