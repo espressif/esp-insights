@@ -35,6 +35,11 @@ idf_component_register(SRCS "${srcs}"
                     PRIV_REQUIRES ${priv_req})
 
 set(WRAP_FUNCTIONS esp_log_write esp_log_writev)
+
+if(CONFIG_LIB_BUILDER_COMPILE)
+    list(APPEND WRAP_FUNCTIONS log_printf)
+endif()
+
 foreach(func ${WRAP_FUNCTIONS})
      target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=${func}")
 endforeach()
