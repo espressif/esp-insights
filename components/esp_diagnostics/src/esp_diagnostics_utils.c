@@ -315,6 +315,13 @@ void esp_diag_task_snapshot_dump(void)
 uint32_t esp_diag_meta_crc_get(void)
 {
     uint32_t crc = 0;
+    const esp_app_desc_t *app_desc;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    app_desc = esp_app_get_description();
+#else
+    app_desc = esp_ota_get_app_description();
+#endif
+    crc = ESP_CRC32_LE(crc, (const uint8_t *) app_desc->app_elf_sha256, sizeof(app_desc->app_elf_sha256));
 #if CONFIG_DIAG_ENABLE_METRICS
     uint32_t metrics_len = 0;
     const esp_diag_metrics_meta_t *metrics = esp_diag_metrics_meta_get_all(&metrics_len);
