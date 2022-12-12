@@ -15,10 +15,23 @@
 #include <stdint.h>
 #include <string.h>
 #include "soc/soc_memory_layout.h"
-#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_ota_ops.h"
 #include "rtc_store.h"
+
+#if __has_include("esp_idf_version.h")
+#include "esp_idf_version.h"
+#endif
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+#include "esp_random.h" // esp_system.h does not provice esp_random() API from IDF v5.0
+#endif
+
+#define TAG "RTC_STORE"
 
 /**
  * @brief Manages RTC store for critical and non_critical data
@@ -27,7 +40,9 @@
  *    which may get stuck in recursive mutex etc. Please be careful if you are using logs...
  */
 
-// #define RTC_STORE_DBG_PRINTS 1
+#if CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
+#define RTC_STORE_DBG_PRINTS 1
+#endif
 
 #define DIAG_CRITICAL_BUF_SIZE        CONFIG_RTC_STORE_CRITICAL_DATA_SIZE
 #define NON_CRITICAL_DATA_SIZE        (CONFIG_RTC_STORE_DATA_SIZE - DIAG_CRITICAL_BUF_SIZE)
@@ -71,15 +86,24 @@ typedef struct {
 } data_store_t;
 
 typedef struct {
-    SemaphoreHandle_t lock;
-    data_store_t *store;
+    SemaphoreHandle_t lock;     // critical lock
+    data_store_t *store;        // pointer to rtc data store
+    size_t wrap_cnt;            // keep track of no. of times wrapping happened
 } rbuf_data_t;
 
 typedef struct {
     bool init;
     rbuf_data_t critical;
     rbuf_data_t non_critical;
+    rtc_store_meta_header_t *meta_hdr;
+    char sha_sum[2 * SHA_SIZE + 1];
 } rtc_store_priv_data_t;
+
+// have a strategy to invalidate data beyond this
+//
+#define RTC_STORE_MAX_META_RECORDS  (10) // Max master records possible
+
+// each data record must have an identifier to point a meta
 
 typedef struct {
     struct {
@@ -90,6 +114,8 @@ typedef struct {
         data_store_t store;
         uint8_t buf[DIAG_NON_CRITICAL_BUF_SIZE];
     } non_critical;
+    rtc_store_meta_header_t meta[RTC_STORE_MAX_META_RECORDS];
+    uint8_t meta_hdr_idx;
 } rtc_store_t;
 
 static rtc_store_priv_data_t s_priv_data;
@@ -103,7 +129,11 @@ static inline size_t data_store_get_size(data_store_t *store)
 static inline size_t data_store_get_free_at_end(data_store_t *store)
 {
     data_store_info_t *info = (data_store_info_t *) &store->info;
-    return store->size - (info->filled + info->read_offset);
+    size_t free_at_end = 0;
+    if (info->read_offset + info->filled < store->size) {
+        free_at_end = store->size - (info->filled + info->read_offset);
+    }
+    return free_at_end;
 }
 
 static inline size_t data_store_get_free(data_store_t *store)
@@ -123,9 +153,17 @@ static void rtc_store_read_complete(rbuf_data_t *rbuf_data, size_t len)
     data_store_info_t info =  {
         .value = rbuf_data->store->info.value,
     };
+#if RTC_STORE_DBG_PRINTS
+    ESP_LOGI(TAG, "to free %u, size %u", len, rbuf_data->store->size);
+#endif
     // modify new pointers
     info.filled -= len;
     info.read_offset += len;
+
+    if (((data_store_info_t *) &info)->read_offset > rbuf_data->store->size) {
+        ((data_store_info_t *) &info)->read_offset -= rbuf_data->store->size;
+        rbuf_data->wrap_cnt++; // wrap around count
+    }
 
     // commit modifications
     rbuf_data->store->info.value = info.value;
@@ -134,41 +172,53 @@ static void rtc_store_read_complete(rbuf_data_t *rbuf_data, size_t len)
 static void rtc_store_write_complete(rbuf_data_t *rbuf_data, size_t len)
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
+#if RTC_STORE_DBG_PRINTS
+    ESP_LOGI(TAG, "before write_complete, filled %"PRIu16", size %u, read_offset %"PRIu16", len %u",
+             info->filled, rbuf_data->store->size, info->read_offset, len);
+#endif
+
     info->filled += len;
+
+#if RTC_STORE_DBG_PRINTS
+    ESP_LOGI(TAG, "after write_complete, filled %"PRIu16", size %u, read_offset %"PRIu16", len %u",
+             info->filled, rbuf_data->store->size, info->read_offset, len);
+#endif
 }
 
-static void rtc_store_defrag_complete(rbuf_data_t *rbuf_data)
+// Caller has made sure that enough memory is free...
+static size_t rtc_store_write_at_offset(rbuf_data_t *rbuf_data, void *data, size_t len, size_t offset)
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-    info->read_offset = 0;
-}
+#if RTC_STORE_DBG_PRINTS
+    ESP_LOGI(TAG, "(write_at_offset): size %u, available: %u, filled %u, read_ptr %"PRIu16", to_write %u",
+             rbuf_data->store->size, data_store_get_free(rbuf_data->store),
+             data_store_get_filled(rbuf_data->store), info->read_offset, len);
+#endif
 
-static void rtc_store_rbuf_defrag(rbuf_data_t *rbuf_data)
-{
-    size_t filled = data_store_get_filled(rbuf_data->store);
-    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-    if (filled) {
-        void *__from = (void *) (rbuf_data->store->buf + info->read_offset);
-        void *__to = (void *) rbuf_data->store->buf;
-        memmove(__to, __from, filled);
+    uint16_t write_offset = info->filled + info->read_offset;
+    if (write_offset >= rbuf_data->store->size) { // wrap around
+        write_offset -= rbuf_data->store->size;
     }
-    rtc_store_defrag_complete(rbuf_data);
+
+    size_t free_at_end = data_store_get_free_at_end(rbuf_data->store);
+    if (free_at_end && (free_at_end < offset)) {
+        offset -= free_at_end;
+        memcpy(rbuf_data->store->buf + offset, data, len);
+    } else if (free_at_end && (free_at_end < offset + len)) {
+        free_at_end -= offset;
+        uint8_t *write_ptr = (uint8_t *) (rbuf_data->store->buf + write_offset + offset);
+        memcpy(write_ptr, data, free_at_end);
+        memcpy(rbuf_data->store->buf, data + free_at_end, len - free_at_end);
+    } else {
+        uint8_t *write_ptr = (uint8_t *) (rbuf_data->store->buf + write_offset + offset);
+        memcpy(write_ptr, data, len);
+    }
+    return len;
 }
 
 static size_t rtc_store_write(rbuf_data_t *rbuf_data, void *data, size_t len)
 {
-    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-#if RTC_STORE_DBG_PRINTS
-    printf("rb_info: size %d, available: %d, filled %d, read_ptr %d, to_write %d\n",
-                rbuf_data->store->size, data_store_get_free(rbuf_data->store),
-                data_store_get_filled(rbuf_data->store), info->read_offset, len);
-#endif
-
-    void *write_ptr = (void *) (rbuf_data->store->buf + info->filled + info->read_offset);
-    memcpy(write_ptr, data, len);
-
-    rtc_store_write_complete(rbuf_data, len);
-    return len;
+    return rtc_store_write_at_offset(rbuf_data, data, len, 0);
 }
 
 esp_err_t rtc_store_critical_data_write(void *data, size_t len)
@@ -182,32 +232,30 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
         printf("rtc_store init not done! skipping critical_data_write...\n");
         return ESP_ERR_INVALID_STATE;
     }
-    if (len > DIAG_CRITICAL_BUF_SIZE) {
+
+    size_t len_real = len + 1; // 1 byte to store meta_index
+    if (len_real > DIAG_CRITICAL_BUF_SIZE) {
         printf("rtc_store_critical_data_write: len too large %d, size %d\n",
-                len, DIAG_CRITICAL_BUF_SIZE);
+                len_real, DIAG_CRITICAL_BUF_SIZE);
         return ESP_FAIL;
     }
     xSemaphoreTake(s_priv_data.critical.lock, portMAX_DELAY);
 
     size_t curr_free = data_store_get_free(s_priv_data.critical.store);
-    size_t free_at_end = data_store_get_free_at_end(s_priv_data.critical.store);
+    // size_t free_at_end = data_store_get_free_at_end(s_priv_data.critical.store);
     // If no space available... Raise write fail event
-    if (curr_free < len) {
-        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL, data, len, 0);
-        ret = ESP_ERR_NO_MEM;
-    } else if ((curr_free >= len) && (free_at_end < len)) {
-        // If total-free > len and free-at-end < len
+    if (curr_free < len_real) {
+        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL, data, len_real, 0);
 #if RTC_STORE_DBG_PRINTS
-        printf("rtc_store: defragmenting critical...\n");
+        printf("%s, curr_free %d, req_free %d\n", TAG, curr_free, len_real);
 #endif
-        rtc_store_rbuf_defrag(&s_priv_data.critical);
-        rtc_store_write(&s_priv_data.critical, data, len);
-    } else { // we have enough space
-        rtc_store_write(&s_priv_data.critical, data, len);
+        ret = ESP_ERR_NO_MEM;
+    } else { // we have enough space of (len + 1)
+        rtc_store_write(&s_priv_data.critical, &s_rtc_store.meta_hdr_idx, 1);
+        rtc_store_write_at_offset(&s_priv_data.critical, data, len, 1);
+        rtc_store_write_complete(&s_priv_data.critical, len + 1);
+        curr_free = data_store_get_free(s_priv_data.critical.store);
     }
-
-    curr_free = data_store_get_free(s_priv_data.critical.store);
-
     xSemaphoreGive(s_priv_data.critical.lock);
 
     if (curr_free < DIAG_CRITICAL_DATA_REPORTING_WATERMARK) {
@@ -215,6 +263,8 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
     }
     return ret;
 }
+
+static int rtc_store_data_read_unsafe(rbuf_data_t *rbuf_data, uint8_t *buf, size_t size);
 
 esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t len)
 {
@@ -229,7 +279,7 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
         return ESP_ERR_INVALID_STATE;
     }
     rtc_store_non_critical_data_hdr_t header;
-    size_t req_free = sizeof(header) + len;
+    size_t req_free = sizeof(header) + len + 1; // 1 byte for meta index
     size_t curr_free;
 
     if (req_free > DIAG_NON_CRITICAL_BUF_SIZE) {
@@ -243,12 +293,13 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     }
 
 #if CONFIG_RTC_STORE_OVERWRITE_NON_CRITICAL_DATA
-    data_store_info_t *info = (data_store_info_t *) &s_priv_data.non_critical.store->info;
     /* Make enough room for the item */
     while (data_store_get_free(s_priv_data.non_critical.store) < req_free) {
-        uint8_t *read_ptr = s_priv_data.non_critical.store->buf + info->read_offset;
-        memcpy(&header, read_ptr, sizeof(header));
-        rtc_store_read_complete(&s_priv_data.non_critical, sizeof(header) + header.len);
+        uint8_t tmp_buf[sizeof(header) + 1];
+        rtc_store_data_read_unsafe(&s_priv_data.non_critical, tmp_buf, sizeof(tmp_buf));
+        memcpy(&header, tmp_buf + 1, sizeof(header)); // because 1 byte is meta_hdr idx
+        size_t to_free = sizeof(tmp_buf) + header.len;
+        rtc_store_read_complete(&s_priv_data.non_critical, to_free);
     }
 #else // just check if we have enough space to write the item
     curr_free = data_store_get_free(s_priv_data.non_critical.store);
@@ -259,22 +310,15 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     }
 #endif
 
-    // If total-free > len and free-at-end < len
-    if ((data_store_get_free(s_priv_data.non_critical.store) >= req_free) &&
-            (data_store_get_free_at_end(s_priv_data.non_critical.store) < req_free)) {
-#if RTC_STORE_DBG_PRINTS
-        printf("rtc_store: defragmenting non_critical...\n");
-#endif
-        rtc_store_rbuf_defrag(&s_priv_data.non_critical);
-    }
-
     memset(&header, 0, sizeof(header));
     header.dg = dg;
     header.len = len;
 
-    // we have made sure of free size at this point
-    rtc_store_write(&s_priv_data.non_critical, &header, sizeof(header));
-    rtc_store_write(&s_priv_data.non_critical, data, len);
+    // we have made sure of free size at this point, write index byte, data header and then actual data
+    rtc_store_write(&s_priv_data.non_critical, &s_rtc_store.meta_hdr_idx, 1);
+    rtc_store_write_at_offset(&s_priv_data.non_critical, &header, sizeof(header), 1);
+    rtc_store_write_at_offset(&s_priv_data.non_critical, data, len, 1 + sizeof(header));
+    rtc_store_write_complete(&s_priv_data.non_critical, req_free);
 
     curr_free = data_store_get_free(s_priv_data.non_critical.store);
     xSemaphoreGive(s_priv_data.non_critical.lock);
@@ -286,36 +330,39 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     return ESP_OK;
 }
 
-static const void *rtc_store_data_read_and_lock(rbuf_data_t *rbuf_data, size_t *size)
+static int rtc_store_data_read_unsafe(rbuf_data_t *rbuf_data, uint8_t *buf, size_t size)
 {
-    if (!size) {
-        return NULL;
-    }
-    if (!s_priv_data.init) {
-        return NULL;
-    }
-    xSemaphoreTake(rbuf_data->lock, portMAX_DELAY);
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
-    *size = info->filled;
-    if (info->read_offset + info->filled > rbuf_data->store->size) {
-        /* data is wrapped! note: this case doesn't happen, as we keep aligning data to start */
-        *size = rbuf_data->store->size - info->read_offset;
+
+    if (info->filled < size) {
+        size = info->filled;
     }
-    if (*size) {
-        return (rbuf_data->store->buf + info->read_offset);
+
+    size_t data_at_end = rbuf_data->store->size - info->read_offset;
+    if (data_at_end < size) {
+        // data is wrapped, read data in 2 parts
+        memcpy(buf, rbuf_data->store->buf + info->read_offset, data_at_end);
+        memcpy(buf + data_at_end, rbuf_data->store->buf, size - data_at_end);
+    } else {
+        // single memcpy
+        memcpy(buf, rbuf_data->store->buf + info->read_offset, size);
     }
-    xSemaphoreGive(rbuf_data->lock);
-    return NULL;
+    return size;
 }
 
-static esp_err_t rtc_store_data_release_and_unlock(rbuf_data_t *rbuf_data, size_t size)
+static int rtc_store_data_read(rbuf_data_t *rbuf_data, uint8_t *buf, size_t size)
 {
-    if (!s_priv_data.init) {
-        return ESP_ERR_INVALID_STATE;
+    if (!size) {
+        return -1;
     }
-    rtc_store_read_complete(rbuf_data, size);
+    if (!s_priv_data.init) {
+        return -1;
+    }
+
+    xSemaphoreTake(rbuf_data->lock, portMAX_DELAY);
+    size = rtc_store_data_read_unsafe(rbuf_data, buf, size);
     xSemaphoreGive(rbuf_data->lock);
-    return ESP_OK;
+    return size;
 }
 
 static esp_err_t rtc_store_data_release(rbuf_data_t *rbuf_data, size_t size)
@@ -323,31 +370,43 @@ static esp_err_t rtc_store_data_release(rbuf_data_t *rbuf_data, size_t size)
     if (!s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-    size_t data_size;
-    if (rtc_store_data_read_and_lock(rbuf_data, &data_size)) {
-        rtc_store_data_release_and_unlock(rbuf_data, size);
+    xSemaphoreTake(rbuf_data->lock, portMAX_DELAY);
+    data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
+    if (info->filled < size) {
+        xSemaphoreGive(rbuf_data->lock);
+        return ESP_FAIL;
     }
+    rtc_store_read_complete(rbuf_data, size);
+    xSemaphoreGive(rbuf_data->lock);
     return ESP_OK;
 }
 
-const void *rtc_store_critical_data_read_and_lock(size_t *size)
+int rtc_store_critical_data_read(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_read_and_lock(&s_priv_data.critical, size);
+    return rtc_store_data_read(&s_priv_data.critical, buf, size);
 }
 
-const void *rtc_store_non_critical_data_read_and_lock(size_t *size)
+int rtc_store_critical_data_read_and_release(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_read_and_lock(&s_priv_data.non_critical, size);
+    int data_read = rtc_store_data_read(&s_priv_data.critical, buf, size);
+    if (data_read > 0) {
+        rtc_store_data_release(&s_priv_data.critical, size);
+    }
+    return data_read;
 }
 
-esp_err_t rtc_store_critical_data_release_and_unlock(size_t size)
+int rtc_store_non_critical_data_read(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_release_and_unlock(&s_priv_data.critical, size);
+    return rtc_store_data_read(&s_priv_data.non_critical, buf, size);
 }
 
-esp_err_t rtc_store_non_critical_data_release_and_unlock(size_t size)
+int rtc_store_non_critical_data_read_and_release(uint8_t *buf, size_t size)
 {
-    return rtc_store_data_release_and_unlock(&s_priv_data.non_critical, size);
+    int data_read = rtc_store_data_read(&s_priv_data.non_critical, buf, size);
+    if (data_read > 0) {
+        rtc_store_data_release(&s_priv_data.non_critical, data_read);
+    }
+    return data_read;
 }
 
 esp_err_t rtc_store_critical_data_release(size_t size)
@@ -379,8 +438,7 @@ static bool rtc_store_integrity_check(data_store_t *store)
 {
     data_store_info_t *info = (data_store_info_t *) &store->info;
     if (info->filled > store->size ||
-            info->read_offset > store->size ||
-            (info->read_offset + info->filled) > store->size) {
+            info->read_offset > store->size) {
         return false;
     }
     return true;
@@ -405,8 +463,8 @@ static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
     if (reset_reason == ESP_RST_UNKNOWN ||
             reset_reason == ESP_RST_POWERON ||
             reset_reason == ESP_RST_BROWNOUT) {
-        memset(rtc_store, 0, sizeof(data_store_t));
-        memset(rtc_buf, 0, rtc_buf_size);
+        // TODO: also check if hash is changed
+        rtc_store->info.value = 0;
     }
 
     /* Point priv_data to actual RTC data */
@@ -416,9 +474,89 @@ static esp_err_t rtc_store_rbuf_init(rbuf_data_t *rbuf_data,
 
     if (rtc_store_integrity_check(rtc_store) == false) {
         // discard all the existing data
-        printf("%s: intergrity_check failed, discarding old data...\n", "rtc_store");
+        printf("%s: intergrity_check failed, discarding old data...\n", TAG);
         rtc_store->info.value = 0;
     }
+    return ESP_OK;
+}
+
+rtc_store_meta_header_t *rtc_store_get_meta_record_by_index(uint8_t idx)
+{
+    if (idx >= RTC_STORE_MAX_META_RECORDS) {
+        printf("%s: meta index out of range [0, %d], index %d\n",
+               TAG, RTC_STORE_MAX_META_RECORDS - 1, idx);
+        return NULL;
+    }
+    return &s_rtc_store.meta[idx];
+}
+
+rtc_store_meta_header_t *rtc_store_get_meta_record_current()
+{
+    return &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
+}
+
+static inline uint8_t to_int_digit(unsigned val)
+{
+    return (val <= '9') ? (val - '0') : (val - 'a' + 10);
+}
+
+static void hex_to_bytes(uint8_t *src, uint8_t *dst, int out_len)
+{
+    for (int i = 0; i < out_len; i++) {
+        uint8_t val0 = to_int_digit(src[2 * i]);
+        uint8_t val1 = to_int_digit(src[2 * i + 1]);
+        dst[i] = (val0 << 4) | (val1);
+    }
+}
+
+static esp_err_t rtc_store_meta_hdr_init()
+{
+    uint8_t gen_id = 0, boot_cnt = 0;
+    // Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        err = nvs_flash_erase();
+        if (err != ESP_OK) {
+            printf("%s: NVS erase failed!\n", TAG);
+            goto skip_nvs_read_write;
+        }
+        err = nvs_flash_init();
+    }
+    if (err != ESP_OK) {
+        printf("%s: NVS init failed!\n", TAG);
+        goto skip_nvs_read_write;
+    }
+
+    nvs_handle_t nvs_handle;
+    // Open NVS and read our values
+    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        printf("%s: Error (%s) opening NVS handle!\n", TAG, esp_err_to_name(err));
+        goto skip_nvs_read_write;
+    }
+    err = nvs_get_u8(nvs_handle, "gen_id", &gen_id) ||
+            nvs_get_u8(nvs_handle, "boot_cnt", &boot_cnt);
+
+    boot_cnt += 1;
+
+    if (err != ESP_OK) { // gen_id not found in NVS, hard reset case
+        gen_id = esp_random();
+        boot_cnt = 0;
+        nvs_set_u8(nvs_handle, "gen_id", gen_id);
+    }
+    nvs_set_u8(nvs_handle, "boot_cnt", boot_cnt);
+skip_nvs_read_write:
+
+    s_rtc_store.meta_hdr_idx = (s_rtc_store.meta_hdr_idx + 1) % RTC_STORE_MAX_META_RECORDS;
+    s_priv_data.meta_hdr = &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
+
+    // populate meta header
+    esp_ota_get_app_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
+    hex_to_bytes((uint8_t *) s_priv_data.sha_sum, (uint8_t *) s_priv_data.meta_hdr->sha_sum, SHA_SIZE);
+
+    s_priv_data.meta_hdr->gen_id = gen_id;
+    s_priv_data.meta_hdr->boot_cnt = boot_cnt;
+
     return ESP_OK;
 }
 
@@ -451,6 +589,17 @@ esp_err_t rtc_store_init(void)
         rtc_store_rbuf_deinit(&s_priv_data.critical);
         return err;
     }
+
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+
+    if (reset_reason == ESP_RST_UNKNOWN ||
+            reset_reason == ESP_RST_POWERON ||
+            reset_reason == ESP_RST_BROWNOUT) {
+        // TODO: also check if hash is changed
+        s_rtc_store.meta_hdr_idx = -1;
+    }
+    rtc_store_meta_hdr_init();
+
     s_priv_data.init = true;
     return ESP_OK;
 }

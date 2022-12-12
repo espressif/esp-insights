@@ -55,6 +55,8 @@
 #define INSIGHTS_DATA_MAX_SIZE  CONFIG_RTC_STORE_DATA_SIZE
 #endif
 
+#define INSIGHTS_READ_BUF_SIZE  (1024)  // read this much data from data store in one go
+
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 #define KEY_LOG_WR_FAIL    "log_wr_fail"
 
@@ -71,6 +73,7 @@ typedef struct esp_insights_entry {
 
 typedef struct {
     uint8_t *scratch_buf;
+    uint8_t *read_buf;      // buffer to hold data read from RTC buf
     int data_msg_id;
     uint32_t data_msg_len;
     SemaphoreHandle_t data_lock;
@@ -86,7 +89,7 @@ typedef struct {
     TimerHandle_t data_send_timer; /* timer to reset data_send_inprogress flag on timeout */
     char *node_id;
     int boot_msg_id;   /* To track whether first message is sent or not, -1:failed, 0:success, >0:inprogress */
-    bool init_done;
+    bool init_done;      /* true if insights is enabled */
 } esp_insights_data_t;
 
 #ifdef CONFIG_ESP_INSIGHTS_ENABLED
@@ -291,7 +294,7 @@ static void hex_dump(uint8_t *data, uint32_t len)
 static void send_boottime_data(void)
 {
     uint16_t len = 0;
-    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE);
     esp_insights_encode_boottime_data();
     len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
     if (len == 0) {
@@ -370,10 +373,10 @@ static void send_insights_meta(void)
 static void send_insights_data(void)
 {
     uint16_t len = 0;
-    const void *critical_data = NULL;
-    const void *non_critical_data = NULL;
     size_t critical_data_size = 0;
     size_t non_critical_data_size = 0;
+    size_t critical_consumed = 0;
+    size_t non_critical_consumed = 0;
 
     memset(s_insights_data.scratch_buf, 0, INSIGHTS_DATA_MAX_SIZE);
 
@@ -385,27 +388,21 @@ static void send_insights_data(void)
     }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-    /* If any ESP_LOGE, ESP_LOGW is added in between rtc_store_critical_data_read_and_lock()
-        * and rtc_store_critical_data_release_and_unlock(), system will be deadlocked.
-        * So, encode boottime data before acquiring the data store lock,
-        * Becuase, esp_insights_encode_boottime_data() calls esp_core_dump_image_check() which contain few error logs
-        */
-    critical_data = rtc_store_critical_data_read_and_lock(&critical_data_size);
-    non_critical_data = rtc_store_non_critical_data_read_and_lock(&non_critical_data_size);
+    esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE);
 
-    if (critical_data || non_critical_data) {
-        esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+    critical_data_size = rtc_store_critical_data_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
+    if (critical_data_size > 0) {
+        critical_consumed = esp_insights_encode_critical_data(s_insights_data.read_buf, critical_data_size);
     }
-    if (critical_data) {
-        esp_insights_encode_critical_data(critical_data, critical_data_size);
-        rtc_store_critical_data_release_and_unlock(0);
+
+    non_critical_data_size = rtc_store_non_critical_data_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
+    if (non_critical_data_size > 0) {
+        non_critical_consumed = esp_insights_encode_non_critical_data(s_insights_data.read_buf, non_critical_data_size);
+        rtc_store_non_critical_data_release(non_critical_consumed);
     }
-    if (non_critical_data) {
-        esp_insights_encode_non_critical_data(non_critical_data, non_critical_data_size);
-        rtc_store_non_critical_data_release_and_unlock(non_critical_data_size);
-    }
-    if (critical_data || non_critical_data) {
-        len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
+    len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
+    if (!critical_consumed && !non_critical_consumed) {
+        len = 0; // just ignore the encoded data
     }
 
     if (len == 0) {
@@ -421,13 +418,13 @@ static void send_insights_data(void)
     int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
     if (msg_id > 0) {
         xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
-        s_insights_data.data_msg_len = critical_data_size;
+        s_insights_data.data_msg_len = critical_consumed;
         s_insights_data.data_msg_id = msg_id;
         xTimerReset(s_insights_data.data_send_timer, portMAX_DELAY);
         xSemaphoreGive(s_insights_data.data_lock);
         return;
     } else if (msg_id == 0) {
-        rtc_store_critical_data_release(critical_data_size);
+        rtc_store_critical_data_release(critical_consumed);
         s_insights_data.data_sent = true;
     }
 data_send_end:
@@ -704,14 +701,23 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
     }
     if (config->alloc_ext_ram) {
         s_insights_data.scratch_buf = MEM_ALLOC_EXTRAM(INSIGHTS_DATA_MAX_SIZE);
+        s_insights_data.read_buf = MEM_ALLOC_EXTRAM(INSIGHTS_READ_BUF_SIZE);
     } else {
         s_insights_data.scratch_buf = malloc(INSIGHTS_DATA_MAX_SIZE);
+        s_insights_data.read_buf = malloc(INSIGHTS_READ_BUF_SIZE);
     }
     if (!s_insights_data.scratch_buf) {
         ESP_LOGE(TAG, "Failed to allocate memory for scratch buffer.");
         err = ESP_ERR_NO_MEM;
         goto enable_err;
     }
+    if (!s_insights_data.read_buf) {
+        ESP_LOGE(TAG, "Failed to allocate memory for read_buf");
+        free(s_insights_data.scratch_buf);
+        err = ESP_ERR_NO_MEM;
+        goto enable_err;
+    }
+
     /* Get sha256 */
     esp_diag_device_info_t device_info;
     memset(&device_info, 0, sizeof(device_info));
@@ -774,6 +780,7 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
     ESP_LOGI(TAG, "=========================================");
     ESP_LOGI(TAG, "Insights enabled for Node ID %s", s_insights_data.node_id);
     ESP_LOGI(TAG, "=========================================");
+    s_insights_data.init_done = true;
     return ESP_OK;
 enable_err:
     esp_insights_disable();

@@ -11,25 +11,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <stdint.h>
 #include <esp_log.h>
-#include <esp_diagnostics.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <cbor.h>
-#include <esp_timer.h>
+#include <esp_diagnostics.h>
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 #include <esp_core_dump.h>
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
-#include <rtc_store.h>
 #include <esp_diagnostics_metrics.h>
 #include <esp_diagnostics_variables.h>
 #include <soc/soc_memory_layout.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
+#include "esp_insights_cbor_encoder.h"
+
 
 static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map;
 static CborEncoder s_meta_encoder, s_meta_result_map, s_diag_meta_map, s_diag_meta_data_map;
 
-void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version, const char *sha256)
+static inline void _cbor_encode_meta_hdr(CborEncoder *hdr_map, const rtc_store_meta_header_t *hdr);
+
+void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version)
 {
     cbor_encoder_init(&s_encoder, data, data_size, 0);
     cbor_encoder_create_map(&s_encoder, &s_result_map, 1);
@@ -42,8 +46,12 @@ void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const cha
     cbor_encode_text_stringz(&s_diag_map, "ts");
     cbor_encode_uint(&s_diag_map, esp_diag_timestamp_get());
 
-    cbor_encode_text_stringz(&s_diag_map, "sha256");
-    cbor_encode_text_stringz(&s_diag_map, sha256);
+    // cbor_encode_text_stringz(&s_diag_map, "sha256");
+    // cbor_encode_text_stringz(&s_diag_map, sha256);
+
+    // encode meta_data
+    const rtc_store_meta_header_t *hdr = rtc_store_get_meta_record_current();
+    _cbor_encode_meta_hdr(&s_diag_map, hdr);
 }
 
 size_t esp_insights_cbor_encode_diag_end(void *data)
@@ -154,6 +162,43 @@ void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary)
 }
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 
+// use a scratch_pad to memcpy data before access
+// this avoids `potential` unaligned memory accesses as
+// data pointer we receive is not guaranteed to be word aligned
+static union encode_scratch_buf {
+#if (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
+    esp_diag_str_data_pt_t str_data_pt;
+    esp_diag_data_pt_t data_pt;
+#endif
+    esp_diag_log_data_t log_data_pt;
+    char sha_sum[2 * SHA_SIZE + 1];
+} enc_scratch_buf;
+
+static inline uint8_t to_hex_digit(unsigned val)
+{
+    return (val < 10) ? ('0' + val) : ('a' + val - 10);
+}
+
+static void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len)
+{
+    for (int i = 0; i < in_len; i++) {
+        dst[2 * i] = to_hex_digit(src[i] >> 4);
+        dst[2 * i + 1] = to_hex_digit(src[i] & 0xf);
+    }
+    dst[2 * in_len] = 0;
+}
+
+static inline void _cbor_encode_meta_hdr(CborEncoder *hdr_map, const rtc_store_meta_header_t *hdr)
+{
+    cbor_encode_text_stringz(hdr_map, "sha256");
+    bytes_to_hex((uint8_t *) hdr->sha_sum, (uint8_t *) enc_scratch_buf.sha_sum, SHA_SIZE); // expand uint8 packed data to hex
+    cbor_encode_text_stringz(hdr_map, enc_scratch_buf.sha_sum);
+    cbor_encode_text_stringz(hdr_map, "gen_id");
+    cbor_encode_uint(hdr_map, hdr->gen_id);
+    cbor_encode_text_stringz(hdr_map, "boot_cnt");
+    cbor_encode_uint(hdr_map, hdr->boot_cnt);
+}
+
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info)
 {
     CborEncoder boot_map;
@@ -176,7 +221,41 @@ void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info
     cbor_encode_text_stringz(&boot_map, device_info->project_name);
     cbor_encode_text_stringz(&boot_map, "app_ver");
     cbor_encode_text_stringz(&boot_map, device_info->app_version);
+
     cbor_encoder_close_container(&s_diag_data_map, &boot_map);
+}
+
+void esp_insights_cbor_encode_meta_c_hdr(const rtc_store_meta_header_t *hdr)
+{
+    CborEncoder hdr_map;
+    cbor_encode_text_stringz(&s_diag_data_map, "meta_c");
+    cbor_encoder_create_map(&s_diag_data_map, &hdr_map, CborIndefiniteLength);
+
+    CborEncoder map_list;
+    cbor_encode_text_stringz(&hdr_map, "maps_to");
+    cbor_encoder_create_array(&hdr_map, &map_list, CborIndefiniteLength);
+    cbor_encode_text_stringz(&map_list, "traces");
+    cbor_encoder_close_container(&hdr_map, &map_list);
+
+    _cbor_encode_meta_hdr(&hdr_map, hdr);
+    cbor_encoder_close_container(&s_diag_data_map, &hdr_map);
+}
+
+void esp_insights_cbor_encode_meta_nc_hdr(const rtc_store_meta_header_t *hdr)
+{
+    CborEncoder hdr_map;
+    cbor_encode_text_stringz(&s_diag_data_map, "meta_nc");
+    cbor_encoder_create_map(&s_diag_data_map, &hdr_map, CborIndefiniteLength);
+
+    CborEncoder map_list;
+    cbor_encode_text_stringz(&hdr_map, "maps_to");
+    cbor_encoder_create_array(&hdr_map, &map_list, CborIndefiniteLength);
+    cbor_encode_text_stringz(&map_list, "metrics");
+    cbor_encode_text_stringz(&map_list, "params");
+    cbor_encoder_close_container(&hdr_map, &map_list);
+
+    _cbor_encode_meta_hdr(&hdr_map, hdr);
+    cbor_encoder_close_container(&s_diag_data_map, &hdr_map);
 }
 
 static void encode_msg_args(CborEncoder *element, uint8_t *args, uint8_t args_len)
@@ -322,9 +401,13 @@ static void encode_msg_args(CborEncoder *element, uint8_t *args, uint8_t args_le
 #endif /* CONFIG_DIAG_LOG_MSG_ARG_FORMAT_TLV */
 }
 
-static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *log)
+static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *data)
 {
     CborEncoder element;
+    esp_diag_log_data_t *log = &enc_scratch_buf.log_data_pt;
+    // copy at aligned address to avoid potential alignment issue
+    memcpy(log, data, sizeof(esp_diag_str_data_pt_t));
+
     cbor_encoder_create_map(list, &element, CborIndefiniteLength);
     cbor_encode_text_stringz(&element, "ts");
     cbor_encode_uint(&element, log->timestamp);
@@ -343,7 +426,7 @@ static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *log)
     cbor_encoder_close_container(list, &element);
 }
 
-static void encode_log_list(CborEncoder *map, esp_diag_log_type_t type,
+static size_t encode_log_list(CborEncoder *map, esp_diag_log_type_t type,
                               const char *key, const uint8_t *data, size_t size)
 {
     int i = 0, len = 0;
@@ -351,37 +434,49 @@ static void encode_log_list(CborEncoder *map, esp_diag_log_type_t type,
     esp_diag_log_data_t *log = NULL;
     cbor_encode_text_stringz(map, key);
     cbor_encoder_create_array(map, &list, CborIndefiniteLength);
-    while (size > 0) {
+    uint8_t meta_idx = data[0];
+    while (size > sizeof (esp_diag_log_data_t)) {
+        if (data[i] != meta_idx) {
+#if INSIGHTS_DEBUG_ENABLED
+            printf("%s: skip data for next iteration meta: %d, data[i]: %d, itr: %d\n",
+                    "insights_cbor_enocoder", meta_idx, data[i], i);
+#endif
+            break; // do not encode for next meta info
+        }
+        i += 1; // skip meta byte
+        size -= 1;
         if (data[i] == type) {
             log = (esp_diag_log_data_t *)&data[i];
             encode_log_element(&list, log);
         }
         len = sizeof(esp_diag_log_data_t);
         i += len;
-        size -= len;
+        size -= len ;
     }
     cbor_encoder_close_container(map, &list);
+    return i;
 }
 
 /* The TinyCBOR library does not support DOM (Document Object Model)-like API.
  * So, we need to traverse through the entire data to encode every type of log.
  */
-void esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size)
+size_t esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size)
 {
-    /* Logs are stored as array of esp_diag_log_data_t,
-     * validate that data size is multiple of esp_diag_log_data_t size.
-     */
-    if (size % sizeof(esp_diag_log_data_t) != 0) {
-        return;
-    }
-
     CborEncoder log_map;
     cbor_encode_text_stringz(&s_diag_data_map, "traces");
     cbor_encoder_create_map(&s_diag_data_map, &log_map, CborIndefiniteLength);
-    encode_log_list(&log_map, ESP_DIAG_LOG_TYPE_ERROR, "errors", data, size);
-    encode_log_list(&log_map, ESP_DIAG_LOG_TYPE_WARNING, "warnings", data, size);
-    encode_log_list(&log_map, ESP_DIAG_LOG_TYPE_EVENT, "events", data, size);
+    size_t consumed = 0, consumed_max = 0;
+    consumed_max = encode_log_list(&log_map, ESP_DIAG_LOG_TYPE_ERROR, "errors", data, size);
+    consumed = encode_log_list(&log_map, ESP_DIAG_LOG_TYPE_WARNING, "warnings", data, size);
+    if (consumed > consumed_max) {
+        consumed_max = consumed;
+    }
+    consumed = encode_log_list(&log_map, ESP_DIAG_LOG_TYPE_EVENT, "events", data, size);
+    if (consumed > consumed_max) {
+        consumed_max = consumed;
+    }
     cbor_encoder_close_container(&s_diag_data_map, &log_map);
+    return consumed_max;
 }
 
 #if (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
@@ -390,8 +485,9 @@ static void encode_str_data_pt(CborEncoder *array, const uint8_t *data)
 {
     CborEncoder map;
     cbor_encoder_create_map(array, &map, CborIndefiniteLength);
-
-    esp_diag_str_data_pt_t *m_data = (esp_diag_str_data_pt_t *)data;
+    esp_diag_str_data_pt_t *m_data = &enc_scratch_buf.str_data_pt;
+    // copy at aligned address to avoid potential alignment issue
+    memcpy(m_data, data, sizeof(esp_diag_str_data_pt_t));
     cbor_encode_text_stringz(&map, "n");
     cbor_encode_text_stringz(&map, m_data->key);
     cbor_encode_text_stringz(&map, "v");
@@ -406,8 +502,10 @@ static void encode_data_pt(CborEncoder *array, const uint8_t *data)
 {
     CborEncoder map;
     cbor_encoder_create_map(array, &map, CborIndefiniteLength);
+    esp_diag_data_pt_t *m_data = &enc_scratch_buf.data_pt;
+    // copy at aligned address to avoid potential alignment issue
+    memcpy(m_data, data, sizeof(esp_diag_data_pt_t));
 
-    esp_diag_data_pt_t *m_data = (esp_diag_data_pt_t *)data;
     cbor_encode_text_stringz(&map, "n");
     cbor_encode_text_stringz(&map, m_data->key);
     cbor_encode_text_stringz(&map, "v");
@@ -443,7 +541,7 @@ static void encode_data_pt(CborEncoder *array, const uint8_t *data)
     cbor_encoder_close_container(array, &map);
 }
 
-static void encode_data_points(const uint8_t *data, size_t size, const char *key, uint16_t type)
+static size_t encode_data_points(const uint8_t *data, size_t size, const char *key, uint16_t type)
 {
     assert(key);
     size_t i = 0;
@@ -451,19 +549,53 @@ static void encode_data_points(const uint8_t *data, size_t size, const char *key
     rtc_store_non_critical_data_hdr_t header;
     esp_diag_data_type_t data_type;
 
-    if (!data) {
-        return;
+    if (!data || (size <= sizeof(header))) {
+        printf("%s: Invalid arg! data %p, size %d. line %d\n",
+                "insights_cbor_enocoder", data, size, __LINE__);
+        return 0;
     }
     cbor_encode_text_stringz(&s_diag_data_map, key);
     cbor_encoder_create_array(&s_diag_data_map, &array, CborIndefiniteLength);
-    while (size > 0) {
-        memset(&header, 0, sizeof(header));
+    uint8_t meta_idx = data[0];
+    while (size > sizeof(header)) { // if remaining
+        if (data[i] != meta_idx) {
+#if INSIGHTS_DEBUG_ENABLED
+            printf("%s: skip data for next iteration meta: %d, data[i]: %d, itr: %d\n",
+                    "insights_cbor_enocoder", meta_idx, data[i], i);
+#endif
+            break; // do not encode for next meta info
+        }
+        i += 1; // skip meta_idx byte
+        size -= 1;
+
         memcpy(&header, data + i, sizeof(header));
-        if (!header.dg || !esp_ptr_in_drom(header.dg) || !header.len) {
+        if (sizeof(header) + header.len > size) {
+#if INSIGHTS_DEBUG_ENABLED
+            // partial record
+            printf("%s: partial record, needed %d, size %d\n",
+                    "insights_cbor_enocoder", sizeof(header) + header.len, size);
+#endif
+            i -= 1;
+            size += 1;
             break;
         }
-        if ((uint16_t)(data[i + sizeof(header)]) == type) {
-            data_type = data[i + sizeof(header) + sizeof(uint16_t)];
+
+        if (!header.dg || !esp_ptr_in_drom(header.dg) || !header.len) {
+#if INSIGHTS_DEBUG_ENABLED
+            // invalid record
+            printf("%s: invalid record, header.dg %p, ptr_in_drom %d, header.len %d\n",
+                   "insights_cbor_enocoder", header.dg, esp_ptr_in_drom(header.dg), header.len);
+
+            ESP_LOG_BUFFER_HEX_LEVEL("cbor_enc", data, size, ESP_LOG_INFO);
+#endif
+            i -= 1;
+            size += 1;
+            break;
+        }
+        uint32_t type_int;
+        memcpy(&type_int, &data[i + sizeof(header)], 4); // copy, (b'cos alignment!)
+        if ((type_int & 0xffff) == type) {
+            data_type = (type_int >> 16) & 0xffff;
             if (data_type == ESP_DIAG_DATA_TYPE_STR && header.len == sizeof(esp_diag_str_data_pt_t)) {
                 encode_str_data_pt(&array, data + i + sizeof(header));
             } else if (header.len == sizeof(esp_diag_data_pt_t)) {
@@ -474,20 +606,21 @@ static void encode_data_points(const uint8_t *data, size_t size, const char *key
         i += (sizeof(header) + header.len);
     }
     cbor_encoder_close_container(&s_diag_data_map, &array);
+    return i;
 }
 #endif /* (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES) */
 
 #if CONFIG_DIAG_ENABLE_METRICS
-void esp_insights_cbor_encode_diag_metrics(const uint8_t *data, size_t size)
+size_t esp_insights_cbor_encode_diag_metrics(const uint8_t *data, size_t size)
 {
-    encode_data_points(data, size, "metrics", ESP_DIAG_DATA_PT_METRICS);
+    return encode_data_points(data, size, "metrics", ESP_DIAG_DATA_PT_METRICS);
 }
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
 
 #if CONFIG_DIAG_ENABLE_VARIABLES
-void esp_insights_cbor_encode_diag_variables(const uint8_t *data, size_t size)
+size_t  esp_insights_cbor_encode_diag_variables(const uint8_t *data, size_t size)
 {
-    encode_data_points(data, size, "params", ESP_DIAG_DATA_PT_VARIABLE);
+    return encode_data_points(data, size, "params", ESP_DIAG_DATA_PT_VARIABLE);
 }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 

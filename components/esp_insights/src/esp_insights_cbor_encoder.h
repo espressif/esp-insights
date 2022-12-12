@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 #include <cbor.h>
 #include <esp_diagnostics_metrics.h>
@@ -18,16 +19,27 @@
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 #include <esp_core_dump.h>
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
+#include <rtc_store.h>
 
-void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version, const char *sha256);
+void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version);
 void esp_insights_cbor_encode_diag_data_begin(void);
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info);
+
+/**
+ * @brief encode master header
+ *
+ * @param hdr meta header which contains data regarding message it follows
+ * @param type rtc_store type (viz., "critical", "non_critical")
+ */
+void esp_insights_cbor_encode_meta_c_hdr(const rtc_store_meta_header_t *hdr);
+void esp_insights_cbor_encode_meta_nc_hdr(const rtc_store_meta_header_t *hdr);
+
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary);
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
-void esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size);
-void esp_insights_cbor_encode_diag_metrics(const uint8_t *data, size_t size);
-void esp_insights_cbor_encode_diag_variables(const uint8_t *data, size_t size);
+size_t esp_insights_cbor_encode_diag_logs(const uint8_t *data, size_t size);
+size_t esp_insights_cbor_encode_diag_metrics(const uint8_t *data, size_t size);
+size_t esp_insights_cbor_encode_diag_variables(const uint8_t *data, size_t size);
 void esp_insights_cbor_encode_diag_data_end(void);
 size_t esp_insights_cbor_encode_diag_end(void *data);
 
