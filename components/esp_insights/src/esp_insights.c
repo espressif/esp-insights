@@ -313,6 +313,10 @@ static void send_boottime_data(void)
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
         esp_core_dump_image_erase();
 #endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
+    } else {
+#if INSIGHTS_DEBUG_ENABLED
+        ESP_LOGI(TAG, "boottime_data message send failed");
+#endif
     }
 }
 
@@ -356,6 +360,10 @@ static void send_insights_meta(void)
         xSemaphoreGive(s_insights_data.data_lock);
     } else if (msg_id == 0) {
         esp_insights_meta_nvs_crc_set(s_insights_data.meta_crc);
+    } else {
+#if INSIGHTS_DEBUG_ENABLED
+        ESP_LOGI(TAG, "meta message send failed");
+#endif
     }
 }
 #endif /* SEND_INSIGHTS_META */
@@ -426,6 +434,10 @@ static void send_insights_data(void)
     } else if (msg_id == 0) {
         rtc_store_critical_data_release(critical_consumed);
         s_insights_data.data_sent = true;
+    } else {
+#if INSIGHTS_DEBUG_ENABLED
+        ESP_LOGI(TAG, "insights_data message send failed");
+#endif
     }
 data_send_end:
     xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
@@ -510,9 +522,11 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
 static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
 {
     esp_err_t ret_val = rtc_store_critical_data_write(data, len);
+#if INSIGHTS_DEBUG_ENABLED
     if (ret_val != ESP_OK) {
-        printf("rtc_store_critical_data_write failed len %d, err 0x%04x\n", len, ret_val);
+        ESP_LOGI(TAG, "rtc_store_critical_data_write failed len %d, err 0x%04x", len, ret_val);
     }
+#endif
     return ret_val;
 }
 
@@ -520,9 +534,11 @@ static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
 static esp_err_t metrics_write_cb(const char *group, void *data, size_t len, void *cb_arg)
 {
     esp_err_t ret_val = rtc_store_non_critical_data_write(group, data, len);
+#if INSIGHTS_DEBUG_ENABLED
     if (ret_val != ESP_OK) {
-        printf("rtc_store_non_critical_data_write failed group %s, len %d, err 0x%04x\n", group, len, ret_val);
+        ESP_LOGI(TAG, "rtc_store_non_critical_data_write failed group %s, len %d, err 0x%04x", group, len, ret_val);
     }
+#endif
     return ret_val;
 }
 
