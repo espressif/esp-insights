@@ -18,7 +18,7 @@ if(CONFIG_DIAG_ENABLE_VARIABLES)
     endif()
 endif()
 
-set(priv_req freertos app_update)
+set(priv_req freertos app_update rmaker_common)
 
 # esp_hw_support component was introduced in v4.3
 if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER "4.2")

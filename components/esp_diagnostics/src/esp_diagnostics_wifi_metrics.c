@@ -14,10 +14,12 @@
 
 #include <string.h>
 #include <esp_log.h>
-#include <esp_wifi.h>
-#include <esp_diagnostics_metrics.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
+#include <esp_wifi.h>
+
+#include <esp_rmaker_work_queue.h>
+#include <esp_diagnostics_metrics.h>
 #include "esp_diagnostics_internal.h"
 
 #define LOG_TAG            "wifi_metrics"
@@ -127,9 +129,14 @@ esp_err_t esp_diag_wifi_metrics_dump(void)
     return ESP_OK;
 }
 
-static void wifi_timer_cb(TimerHandle_t handle)
+static void wifi_metrics_dump_cb(void *arg)
 {
     esp_diag_wifi_metrics_dump();
+}
+
+static void wifi_timer_cb(TimerHandle_t handle)
+{
+    esp_rmaker_work_queue_add_task(wifi_metrics_dump_cb, NULL);
 }
 
 esp_err_t esp_diag_wifi_metrics_init(void)
