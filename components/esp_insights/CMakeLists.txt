@@ -42,4 +42,4 @@ endif()
 
 # Added just to automatically trigger re-runs of CMake
 git_describe(ESP_INSIGHTS_VERSION ${COMPONENT_DIR})
-message("ESP Insights Project commit: " ${INSIGHTS_VERSION})
+message("ESP Insights Project commit: " ${ESP_INSIGHTS_VERSION})

@@ -14,10 +14,12 @@
 
 #include <string.h>
 #include <esp_heap_caps.h>
-#include <esp_diagnostics.h>
-#include <esp_diagnostics_metrics.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
+
+#include <esp_rmaker_work_queue.h>
+#include <esp_diagnostics.h>
+#include <esp_diagnostics_metrics.h>
 #include "esp_diagnostics_internal.h"
 
 #define LOG_TAG            "heap_metrics"
@@ -80,9 +82,14 @@ esp_err_t esp_diag_heap_metrics_dump(void)
     return ESP_OK;
 }
 
-static void heap_timer_cb(TimerHandle_t handle)
+static void heap_metrics_dump_cb(void *arg)
 {
     esp_diag_heap_metrics_dump();
+}
+
+static void heap_timer_cb(TimerHandle_t handle)
+{
+    esp_rmaker_work_queue_add_task(heap_metrics_dump_cb, NULL);
 }
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
