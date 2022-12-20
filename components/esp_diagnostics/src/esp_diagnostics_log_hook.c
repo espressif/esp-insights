@@ -377,13 +377,6 @@ esp_err_t esp_diag_log_event(const char *tag, const char *format, ...)
     esp_err_t err;
     va_list args;
     uint32_t pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
-    if (esp_log_level_get(tag) < ESP_LOG_INFO) {
-        return ESP_FAIL;
-    }
-#endif
-
     va_start(args, format);
     err = diag_log_add(ESP_DIAG_LOG_TYPE_EVENT, pc, tag, format, args);
     va_end(args);
@@ -422,6 +415,26 @@ esp_err_t esp_diag_log_hook_init(esp_diag_log_config_t *config)
     return ESP_OK;
 }
 
+#ifdef CONFIG_LIB_BUILDER_COMPILE
+extern int log_printfv(const char *format, va_list arg);
+
+void __real_log_printf(const char *format, ...);
+
+void __wrap_log_printf(const char *format, ...)
+{
+    va_list list;
+    va_start(list, format);
+    uint32_t pc = 0;
+    pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
+    if (strlen(format) > 7 && format[6] == 'E') {
+        esp_diag_log(ESP_LOG_ERROR, pc, "arduino-esp32", format, list);
+    } else if (strlen(format) > 7 && format[6] == 'W') {
+        esp_diag_log(ESP_LOG_WARN, pc, "arduino-esp32", format, list);
+    }
+    log_printfv(format, list);
+    va_end(list);
+}
+#endif
 /* Wrapping esp_log_write() and esp_log_writev() reduces the
  * changes required in esp_log module to support diagnostics
  */
