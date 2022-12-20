@@ -406,7 +406,7 @@ static void encode_log_element(CborEncoder *list, esp_diag_log_data_t *data)
     CborEncoder element;
     esp_diag_log_data_t *log = &enc_scratch_buf.log_data_pt;
     // copy at aligned address to avoid potential alignment issue
-    memcpy(log, data, sizeof(esp_diag_str_data_pt_t));
+    memcpy(log, data, sizeof(esp_diag_log_data_t));
 
     cbor_encoder_create_map(list, &element, CborIndefiniteLength);
     cbor_encode_text_stringz(&element, "ts");
