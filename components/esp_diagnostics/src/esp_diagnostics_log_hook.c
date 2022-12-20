@@ -377,13 +377,6 @@ esp_err_t esp_diag_log_event(const char *tag, const char *format, ...)
     esp_err_t err;
     va_list args;
     uint32_t pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
-    if (esp_log_level_get(tag) < ESP_LOG_INFO) {
-        return ESP_FAIL;
-    }
-#endif
-
     va_start(args, format);
     err = diag_log_add(ESP_DIAG_LOG_TYPE_EVENT, pc, tag, format, args);
     va_end(args);
