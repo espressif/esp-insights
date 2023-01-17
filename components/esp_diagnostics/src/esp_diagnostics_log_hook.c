@@ -343,34 +343,26 @@ static esp_err_t diag_log_add(esp_diag_log_type_t type, uint32_t pc, const char 
     return write_data(&log, sizeof(log));
 }
 
-/* If log level of a particular tag is set to less than ERROR
- * using esp_log_level_set() then those logs are ignored
+/**
+ * If error logs are enabled via menuconfig, irrespective of if error logs are disabled
+ * using `esp_log_level_set()`, error logs are still reported to Insights cloud
  */
 static esp_err_t esp_diag_log_error(uint32_t pc, const char *tag, const char *format, va_list args)
 {
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
-    if (esp_log_level_get(tag) < ESP_LOG_ERROR) {
-        return ESP_FAIL;
-    }
-#endif
     return diag_log_add(ESP_DIAG_LOG_TYPE_ERROR, pc, tag, format, args);
 }
 
-/* If log level of a particular tag is set to less than WARNING
- * using esp_log_level_set() then those logs are ignored
+/**
+ * If warning logs are enabled via menuconfig, irrespective of if warning logs are disabled
+ * using `esp_log_level_set()`, warning logs are still reported to Insights cloud
  */
 static esp_err_t esp_diag_log_warning(uint32_t pc, const char *tag, const char *format, va_list args)
 {
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
-    if (esp_log_level_get(tag) < ESP_LOG_WARN) {
-        return ESP_FAIL;
-    }
-#endif
     return diag_log_add(ESP_DIAG_LOG_TYPE_WARNING, pc, tag, format, args);
 }
 
-/* If log level of a particular tag is set to less than INFO
- * using esp_log_level_set() then those logs are ignored
+/**
+ * Events are reported irrespective of device logging level.
  */
 esp_err_t esp_diag_log_event(const char *tag, const char *format, ...)
 {
