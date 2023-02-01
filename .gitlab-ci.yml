@@ -62,10 +62,11 @@ before_script:
   image: espressif/idf:latest
   tags:
     - build
-  # variables: # disabled as we get some errors from IDF as well
-  #   PEDANTIC_FLAGS: "-Werror -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
-  #   EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
-  #   EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
+  variables:
+    PEDANTIC_FLAGS: "-Werror -Werror=deprecated-declarations -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
+    EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
+    EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
+    COREDUMP_PATCH: "0"
   artifacts:
     paths:
       - $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}.zip
@@ -94,21 +95,21 @@ build_idf_v5.0:
   image: espressif/idf:release-v5.0
   variables: # esp32c2 not included b'coz of link error on cpu coredump
     EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
-    COREDUMP_PATCH: "0"
 
 build_idf_v4.4:
   extends: .build_template
   image: espressif/idf:release-v4.4
   variables:
     EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
-    COREDUMP_PATCH: "0"
 
 build_idf_v4.3:
   extends: .build_template
   image: espressif/idf:release-v4.3
   variables:
+    PEDANTIC_FLAGS: "-Werror=deprecated-declarations -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
+    EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
+    EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
     EXAMPLE_TARGETS: esp32 esp32s2 esp32c3
-    COREDUMP_PATCH: "0"
 
 build_idf_v4.2.2:
   extends: .build_template

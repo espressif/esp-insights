@@ -28,7 +28,8 @@
 #endif
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-#include "esp_random.h" // esp_system.h does not provice esp_random() API from IDF v5.0
+#include <esp_random.h> // esp_system.h does not provice esp_random() API from IDF v5.0
+#include <esp_app_desc.h> // for `esp_app_get_elf_sha256` API
 #endif
 
 #define TAG "RTC_STORE"
@@ -551,7 +552,11 @@ skip_nvs_read_write:
     s_priv_data.meta_hdr = &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
 
     // populate meta header
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    esp_app_get_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
+#else
     esp_ota_get_app_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
+#endif
     hex_to_bytes((uint8_t *) s_priv_data.sha_sum, (uint8_t *) s_priv_data.meta_hdr->sha_sum, SHA_SIZE);
 
     s_priv_data.meta_hdr->gen_id = gen_id;
