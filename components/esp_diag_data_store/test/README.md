@@ -36,8 +36,8 @@ rm -r sdkconfig build
 idf.py set-target esp32
 
 # Building the firmware
-idf.py -T rtc_store build
+idf.py -T esp_diag_data_store build
 
 # Flash and run the test cases
-idf.py -p <serial-port> -T rtc_store flash monitor
+idf.py -p <serial-port> -T esp_diag_data_store flash monitor
 ```

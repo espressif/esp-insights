@@ -104,4 +104,3 @@ if __name__ == '__main__':
     suite.addTest(TestCaseInsights('test_100_get_crash_count', **kwargs))
     xmlrunner.XMLTestRunner(verbosity=2).run(unittest.TestSuite(suite))
     sys.exit(0)
-
