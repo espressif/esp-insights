@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 #include <esp_err.h>
 #include <esp_event.h>
@@ -18,23 +19,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** @cond **/
-/**
- * @brief RTC store event base
- */
-ESP_EVENT_DECLARE_BASE(RTC_STORE_EVENT);
-/** @endcond **/
-
-/**
- * @brief RTC store events
- */
-typedef enum {
-    RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM,        /*!< Critical data configured threshold crossed */
-    RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL,     /*!< Critical data write failed */
-    RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM,    /*!< Non critical data configured threshold crossed */
-    RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL, /*!< Non critical data write failed */
-} rtc_store_event_t;
 
 #define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA / 2)
 

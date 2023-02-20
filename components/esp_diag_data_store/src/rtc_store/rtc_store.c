@@ -14,13 +14,15 @@
 
 #include <stdint.h>
 #include <string.h>
-#include "soc/soc_memory_layout.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "esp_system.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-#include "esp_ota_ops.h"
+#include <soc/soc_memory_layout.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <esp_system.h>
+#include <esp_log.h>
+#include <nvs_flash.h>
+#include <esp_ota_ops.h>
+
+#include <esp_diag_data_store.h>
 #include "rtc_store.h"
 
 #if __has_include("esp_idf_version.h")
@@ -65,11 +67,12 @@
 
 /* When current free size of buffer drops below (100 - reporting_watermark)% then we post an event */
 #define DIAG_CRITICAL_DATA_REPORTING_WATERMARK \
-    ((DIAG_CRITICAL_BUF_SIZE * (100 - CONFIG_RTC_STORE_REPORTING_WATERMARK_PERCENT)) / 100)
+    ((DIAG_CRITICAL_BUF_SIZE * (100 - CONFIG_DIAG_DATA_STORE_REPORTING_WATERMARK_PERCENT)) / 100)
 #define DIAG_NON_CRITICAL_DATA_REPORTING_WATERMARK \
-    ((DIAG_NON_CRITICAL_BUF_SIZE * (100 - CONFIG_RTC_STORE_REPORTING_WATERMARK_PERCENT)) / 100)
+    ((DIAG_NON_CRITICAL_BUF_SIZE * (100 - CONFIG_DIAG_DATA_STORE_REPORTING_WATERMARK_PERCENT)) / 100)
 
-ESP_EVENT_DEFINE_BASE(RTC_STORE_EVENT);
+/* non critical data is stored in Length - Value format */
+#define SIZE_OF_DATA_LEN    sizeof(size_t)
 
 // Assumption is RTC memory size will never exeed UINT16_MAX
 typedef union {
@@ -246,7 +249,7 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
     // size_t free_at_end = data_store_get_free_at_end(s_priv_data.critical.store);
     // If no space available... Raise write fail event
     if (curr_free < len_real) {
-        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL, data, len_real, 0);
+        esp_event_post(ESP_DIAG_DATA_STORE_EVENT, ESP_DIAG_DATA_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL, data, len_real, 0);
 #if RTC_STORE_DBG_PRINTS
         printf("%s, curr_free %d, req_free %d\n", TAG, curr_free, len_real);
 #endif
@@ -260,7 +263,7 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
     xSemaphoreGive(s_priv_data.critical.lock);
 
     if (curr_free < DIAG_CRITICAL_DATA_REPORTING_WATERMARK) {
-        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
+        esp_event_post(ESP_DIAG_DATA_STORE_EVENT, ESP_DIAG_DATA_STORE_EVENT_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
     }
     return ret;
 }
@@ -306,11 +309,10 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     curr_free = data_store_get_free(s_priv_data.non_critical.store);
     if (curr_free < req_free) {
         xSemaphoreGive(s_priv_data.non_critical.lock);
-        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
+        esp_event_post(ESP_DIAG_DATA_STORE_EVENT, ESP_DIAG_DATA_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
         return ESP_ERR_NO_MEM;
     }
 #endif
-
     memset(&header, 0, sizeof(header));
     header.dg = dg;
     header.len = len;
@@ -326,7 +328,7 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
 
     // Post low memory event even if data overwrite is enabled.
     if (curr_free < DIAG_NON_CRITICAL_DATA_REPORTING_WATERMARK) {
-        esp_event_post(RTC_STORE_EVENT, RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
+        esp_event_post(ESP_DIAG_DATA_STORE_EVENT, ESP_DIAG_DATA_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM, NULL, 0, 0);
     }
     return ESP_OK;
 }

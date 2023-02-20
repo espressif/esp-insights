@@ -18,7 +18,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
 #include <freertos/semphr.h>
-#include <rtc_store.h>
+#include <esp_diag_data_store.h>
 #include <esp_diagnostics.h>
 #include <esp_diagnostics_metrics.h>
 #include <esp_diagnostics_variables.h>
@@ -49,10 +49,15 @@
 #define CLOUD_REPORTING_PERIOD_MAX_SEC    CONFIG_ESP_INSIGHTS_CLOUD_POST_MAX_INTERVAL_SEC
 #define CLOUD_REPORTING_TIMEOUT_TICKS     ((30 * 1000) / portTICK_PERIOD_MS)
 
+#ifdef CONFIG_DIAG_DATA_STORE_RTC
 #if CONFIG_RTC_STORE_DATA_SIZE > (1024 * 4)
 #define INSIGHTS_DATA_MAX_SIZE  (CONFIG_RTC_STORE_DATA_SIZE - 1024)
 #else
 #define INSIGHTS_DATA_MAX_SIZE  CONFIG_RTC_STORE_DATA_SIZE
+#endif
+#else
+/* TODO: Hardcoding it to 6K but needs to think about clearer way to define this */
+#define INSIGHTS_DATA_MAX_SIZE (1024 * 6)
 #endif
 
 #define INSIGHTS_READ_BUF_SIZE  (1024)  // read this much data from data store in one go
@@ -251,7 +256,7 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                     xTimerStop(s_insights_data.data_send_timer, portMAX_DELAY);
                 }
                 if (data->msg_id == s_insights_data.data_msg_id) {
-                    rtc_store_critical_data_release(s_insights_data.data_msg_len);
+                    esp_diag_data_store_critical_release(s_insights_data.data_msg_len);
                     s_insights_data.data_sent = true;
                     s_insights_data.data_send_inprogress = false;
 #if SEND_INSIGHTS_META
@@ -406,15 +411,15 @@ static void send_insights_data(void)
 
     esp_insights_encode_data_begin(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE);
 
-    critical_data_size = rtc_store_critical_data_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
+    critical_data_size = esp_diag_data_store_critical_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
     if (critical_data_size > 0) {
         critical_consumed = esp_insights_encode_critical_data(s_insights_data.read_buf, critical_data_size);
     }
 
-    non_critical_data_size = rtc_store_non_critical_data_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
+    non_critical_data_size = esp_diag_data_store_non_critical_read(s_insights_data.read_buf, INSIGHTS_READ_BUF_SIZE);
     if (non_critical_data_size > 0) {
         non_critical_consumed = esp_insights_encode_non_critical_data(s_insights_data.read_buf, non_critical_data_size);
-        rtc_store_non_critical_data_release(non_critical_consumed);
+        esp_diag_data_store_non_critical_release(non_critical_consumed);
     }
     len = esp_insights_encode_data_end(s_insights_data.scratch_buf);
     if (!critical_consumed && !non_critical_consumed) {
@@ -440,7 +445,7 @@ static void send_insights_data(void)
         xSemaphoreGive(s_insights_data.data_lock);
         return;
     } else if (msg_id == 0) {
-        rtc_store_critical_data_release(critical_consumed);
+        esp_diag_data_store_critical_release(critical_consumed);
         s_insights_data.data_sent = true;
     } else {
 #if INSIGHTS_DEBUG_ENABLED
@@ -489,19 +494,19 @@ esp_err_t esp_insights_send_data(void)
     return ESP_FAIL;
 }
 
-static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
+static void data_store_event_handler(void* arg, esp_event_base_t event_base,
                                     int32_t event_id, void* event_data)
 {
-    if (event_base != RTC_STORE_EVENT) {
+    if (event_base != ESP_DIAG_DATA_STORE_EVENT) {
         return;
     }
     switch(event_id) {
-        case RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM:
-        case RTC_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM:
+        case ESP_DIAG_DATA_STORE_EVENT_CRITICAL_DATA_LOW_MEM:
+        case ESP_DIAG_DATA_STORE_EVENT_NON_CRITICAL_DATA_LOW_MEM:
         {
 #if INSIGHTS_DEBUG_ENABLED
-            ESP_LOGI(TAG, "RTC_STORE_EVENT_%sCRITICAL_DATA_LOW_MEM",
-                    event_id == RTC_STORE_EVENT_CRITICAL_DATA_LOW_MEM ? "" : "NON_");
+            ESP_LOGI(TAG, "ESP_DIAG_DATA_STORE_EVENT_%sCRITICAL_DATA_LOW_MEM",
+                    event_id == ESP_DIAG_DATA_STORE_EVENT_CRITICAL_DATA_LOW_MEM ? "" : "NON_");
 #endif
             if (is_insights_active() == true) {
                 esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
@@ -509,14 +514,14 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
             break;
         }
 
-        case RTC_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
+        case ESP_DIAG_DATA_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
             s_insights_data.log_write_fail_cnt++;
 #if INSIGHTS_DEBUG_ENABLED
             ESP_LOGI(TAG, "Log write fail count: %"PRIu32, s_insights_data.log_write_fail_cnt);
 #endif
             break;
 
-        case RTC_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL:
+        case ESP_DIAG_DATA_STORE_EVENT_NON_CRITICAL_DATA_WRITE_FAIL:
 #if INSIGHTS_DEBUG_ENABLED
             ESP_LOGI(TAG, "Non critical data write failed");
 #endif
@@ -529,10 +534,10 @@ static void rtc_store_event_handler(void* arg, esp_event_base_t event_base,
 
 static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
 {
-    esp_err_t ret_val = rtc_store_critical_data_write(data, len);
+    esp_err_t ret_val = esp_diag_data_store_critical_write(data, len);
 #if INSIGHTS_DEBUG_ENABLED
     if (ret_val != ESP_OK) {
-        ESP_LOGI(TAG, "rtc_store_critical_data_write failed len %d, err 0x%04x", len, ret_val);
+        ESP_LOGI(TAG, "esp_diag_data_store_critical_write failed len %d, err 0x%04x", len, ret_val);
     }
 #endif
     return ret_val;
@@ -541,10 +546,10 @@ static esp_err_t log_write_cb(void *data, size_t len, void *priv_data)
 #if CONFIG_DIAG_ENABLE_METRICS
 static esp_err_t metrics_write_cb(const char *group, void *data, size_t len, void *cb_arg)
 {
-    esp_err_t ret_val = rtc_store_non_critical_data_write(group, data, len);
+    esp_err_t ret_val = esp_diag_data_store_non_critical_write(group, data, len);
 #if INSIGHTS_DEBUG_ENABLED
     if (ret_val != ESP_OK) {
-        ESP_LOGI(TAG, "rtc_store_non_critical_data_write failed group %s, len %d, err 0x%04x", group, len, ret_val);
+        ESP_LOGI(TAG, "esp_diag_data_store_non_critical_write failed group %s, len %d, err 0x%04x", group, len, ret_val);
     }
 #endif
     return ret_val;
@@ -591,7 +596,7 @@ static void metrics_deinit(void)
 #if CONFIG_DIAG_ENABLE_VARIABLES
 static esp_err_t variables_write_cb(const char *group, void *data, size_t len, void *cb_arg)
 {
-    return rtc_store_non_critical_data_write(group, data, len);
+    return esp_diag_data_store_non_critical_write(group, data, len);
 }
 
 static void variables_init(void)
@@ -636,9 +641,9 @@ void esp_insights_disable(void)
     metrics_deinit();
 #endif
     esp_diag_log_hook_disable(ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT);
-    rtc_store_deinit();
+    esp_diag_data_store_deinit();
     esp_event_handler_unregister(INSIGHTS_EVENT, ESP_EVENT_ANY_ID, insights_event_handler);
-    esp_event_handler_unregister(RTC_STORE_EVENT, ESP_EVENT_ANY_ID, rtc_store_event_handler);
+    esp_event_handler_unregister(ESP_DIAG_DATA_STORE_EVENT, ESP_EVENT_ANY_ID, data_store_event_handler);
     if (s_insights_data.data_lock) {
         vSemaphoreDelete(s_insights_data.data_lock);
         s_insights_data.data_lock = NULL;
@@ -758,13 +763,13 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
         ESP_LOGE(TAG, "Failed to register event handler for INSIGHTS_EVENTS");
         goto enable_err;
     }
-    /* Register event handler for rtc store events */
-    err = esp_event_handler_register(RTC_STORE_EVENT, ESP_EVENT_ANY_ID, rtc_store_event_handler, NULL);
+    /* Register event handler for data store events */
+    err = esp_event_handler_register(ESP_DIAG_DATA_STORE_EVENT, ESP_EVENT_ANY_ID, data_store_event_handler, NULL);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register event handler for RTC_STORE_EVENT");
+        ESP_LOGE(TAG, "Failed to register event handler for DIAG_DATA_STORE_EVENT");
         goto enable_err;
     }
-    err = rtc_store_init();
+    err = esp_diag_data_store_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialise RTC store.");
         goto enable_err;

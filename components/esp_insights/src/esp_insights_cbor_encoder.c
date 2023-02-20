@@ -22,6 +22,8 @@
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 #include <esp_core_dump.h>
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
+
+#include <esp_diag_data_store.h>
 #include <esp_diagnostics_metrics.h>
 #include <esp_diagnostics_variables.h>
 #include <soc/soc_memory_layout.h>
@@ -546,6 +548,7 @@ static size_t encode_data_points(const uint8_t *data, size_t size, const char *k
     assert(key);
     size_t i = 0;
     CborEncoder array;
+    /* FIXME */
     rtc_store_non_critical_data_hdr_t header;
     esp_diag_data_type_t data_type;
 
@@ -556,6 +559,7 @@ static size_t encode_data_points(const uint8_t *data, size_t size, const char *k
     }
     cbor_encode_text_stringz(&s_diag_data_map, key);
     cbor_encoder_create_array(&s_diag_data_map, &array, CborIndefiniteLength);
+
     uint8_t meta_idx = data[0];
     while (size > sizeof(header)) { // if remaining
         if (data[i] != meta_idx) {
