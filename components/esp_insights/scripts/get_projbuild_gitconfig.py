@@ -85,7 +85,7 @@ def set_cfg(config_name):
     elif config_name == "toolchain":
         # Set config for Toolchain Version
         arch_target = "xtensa-" + TARGET
-        if TARGET == "esp32c3" or TARGET == "esp32c2":
+        if TARGET == "esp32c3" or TARGET == "esp32c2" or TARGET == "esp32h2":
             arch_target = "riscv32-esp"
         # Get toolchain version
         TOOLCHAIN_STR = "toolchain"
