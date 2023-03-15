@@ -155,6 +155,20 @@ esp_err_t rtc_store_init(void);
  */
 void rtc_store_deinit(void);
 
+/**
+ * @brief Get CRC of RTC Store configuration
+ *
+ * @return crc
+ */
+uint32_t rtc_store_get_crc(void);
+
+/**
+ * @brief Discard values from RTC Store. This API should be called after rtc_store_init();
+ *
+ * @return ESP_OK on success, appropriate error on failure.
+ */
+esp_err_t rtc_store_discard_data(void);
+
 #ifdef __cplusplus
 }
 #endif

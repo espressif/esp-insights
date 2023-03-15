@@ -11,6 +11,6 @@ set(includes "src/rtc_store")
 endif()
 
 idf_component_register(SRCS "${srcs}"
-                       INCLUDE_DIRS "${includes}" include
+                       INCLUDE_DIRS ${includes} "include"
                        PRIV_REQUIRES nvs_flash app_update
                        REQUIRES ${req})

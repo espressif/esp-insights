@@ -25,6 +25,7 @@
 #define INSIGHTS_MQTT_HOST_NVS_KEY       "mqtt_host"
 #define INSIGHTS_NODE_ID                 "node_id"
 #define INSIGHTS_META_CRC_NVS_KEY        "i_meta_crc"
+#define INSIGHTS_NVS_NAMESPACE           "nvs"
 
 extern uint8_t mqtt_server_root_ca_pem_start[] asm("_binary_mqtt_server_crt_start");
 extern uint8_t mqtt_server_root_ca_pem_end[] asm("_binary_mqtt_server_crt_end");
@@ -94,7 +95,7 @@ esp_err_t esp_insights_meta_nvs_crc_get(uint32_t *crc)
         return ESP_ERR_INVALID_ARG;
     }
     nvs_handle_t handle;
-    esp_err_t err = nvs_open("nvs", NVS_READONLY, &handle);
+    esp_err_t err = nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READONLY, &handle);
     if (err != ESP_OK) {
         return err;
     }
@@ -110,7 +111,7 @@ esp_err_t esp_insights_meta_nvs_crc_get(uint32_t *crc)
 esp_err_t esp_insights_meta_nvs_crc_set(uint32_t crc)
 {
     nvs_handle_t handle;
-    esp_err_t err = nvs_open("nvs", NVS_READWRITE, &handle);
+    esp_err_t err = nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
         return err;
     }

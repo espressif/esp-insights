@@ -19,6 +19,7 @@
 #include "esp_log.h"
 #include "sys/time.h"
 #include "esp_system.h"
+#include <esp_crc.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "soc/soc_memory_layout.h"
@@ -310,6 +311,14 @@ void esp_diag_task_snapshot_dump(void)
         print_task_info(&tasks[i]);
     }
     free(tasks);
+}
+
+uint32_t esp_diag_data_size_get_crc(void)
+{
+    size_t diag_data_size = sizeof(esp_diag_data_pt_t) + sizeof(esp_diag_str_data_pt_t) + sizeof(esp_diag_log_data_t);
+    uint32_t crc = 0;
+    crc = esp_crc32_le(crc, (const unsigned char *)&diag_data_size, sizeof(diag_data_size));
+    return crc;
 }
 
 uint32_t esp_diag_meta_crc_get(void)

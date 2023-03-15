@@ -17,6 +17,8 @@
 #include <esp_core_dump.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
+#include <nvs.h>
+#include <esp_crc.h>
 #include <freertos/semphr.h>
 #include <esp_diag_data_store.h>
 #include <esp_diagnostics.h>
@@ -64,6 +66,9 @@
 
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 #define KEY_LOG_WR_FAIL    "log_wr_fail"
+
+#define DIAG_DATA_STORE_CRC_KEY "rtc_buf_sha"
+#define INSIGHTS_NVS_NAMESPACE "storage"
 
 ESP_EVENT_DEFINE_BASE(INSIGHTS_EVENT);
 
@@ -710,6 +715,37 @@ const char *esp_insights_get_node_id(void)
     return s_insights_data.node_id;
 }
 
+static esp_err_t esp_insights_read_diag_data_store_crc_from_nvs(uint32_t *crc)
+{
+    if (!crc) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = nvs_get_u32(handle, DIAG_DATA_STORE_CRC_KEY, crc);
+    nvs_close(handle);
+    return err;
+}
+
+static esp_err_t esp_insights_set_rtc_crc_in_nvs(uint32_t crc)
+{
+    if (!crc) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+err = nvs_set_u32(handle, DIAG_DATA_STORE_CRC_KEY, crc);
+    nvs_commit(handle);
+    nvs_close(handle);
+    return err;
+}
+
 esp_err_t esp_insights_enable(esp_insights_config_t *config)
 {
     esp_err_t err = ESP_OK;
@@ -773,6 +809,18 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialise RTC store.");
         goto enable_err;
+    }
+    uint32_t new_crc, previous_crc;
+    new_crc = esp_diag_data_store_get_crc();
+    new_crc = esp_crc32_le(esp_diag_data_size_get_crc(), (const unsigned char *)&new_crc, sizeof(new_crc));
+    err = esp_insights_read_diag_data_store_crc_from_nvs(&previous_crc);
+    if ((err != ESP_OK) || (new_crc != previous_crc)) {
+        ESP_LOGI(TAG, "RTC Store configuration changed. Discarding previous data from RTC buffers");
+        esp_diag_data_discard_data();
+        err = esp_insights_set_rtc_crc_in_nvs(new_crc);
+        if (err != ESP_OK) {
+            ESP_LOGI(TAG, "Failed to set RTC Store CRC in nvs.");
+        }
     }
     esp_diag_log_config_t log_config = {
         .write_cb = log_write_cb,
