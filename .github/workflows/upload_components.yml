@@ -1,0 +1,21 @@
+name: Push components to Espressif Component Service
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  upload_components:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Upload ESP Insights components to Component Registry
+        uses: espressif/upload-components-ci-action@v1
+        with:
+          directories: >
+            components/esp_insights;
+            components/esp_diagnostics;
+            components/esp_diag_data_store;
+          namespace: "espressif"
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
