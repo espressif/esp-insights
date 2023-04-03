@@ -8,27 +8,19 @@
 */
 #include "string.h"
 #include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 #include "nvs_flash.h"
+#include "protocol_examples_common.h"
+
 #include "esp_insights.h"
 #include "esp_rmaker_utils.h"
-#include "app_wifi.h"
 #include "esp_wifi.h"
 #include "esp_diagnostics_system_metrics.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-
-/* The examples uses configuration that you can set via project configuration menu
-
-    If you'd rather not, just change the below entries to strings with
-    the config you want - ie #define EXAMPLE_WIFI_SSID "mywifissid"
-
-    Default values:
-        CONFIG_ESP_WIFI_SSID               : "myssid"
-        CONFIG_ESP_WIFI_PASSWORD           : "mypassword"
-*/
-#define EXAMPLE_ESP_WIFI_SSID               CONFIG_ESP_WIFI_SSID
-#define EXAMPLE_ESP_WIFI_PASS               CONFIG_ESP_WIFI_PASSWORD
+/* Note: Wi-Fi station credentials can be changed using CONFIG_EXAMPLE_WIFI_SSID and CONFIG_EXAMPLE_WIFI_PASSWORD */
 
 #define MAX_CRASHES 5
 #define MAX_PTRS    30
@@ -108,11 +100,17 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    ret = app_wifi_sta_init(EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect to Wi-Fi, err:0x%x", ret);
-    }
-    ESP_ERROR_CHECK(ret);
+    ESP_ERROR_CHECK(esp_netif_init());
+
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
+     * Read "Establishing Wi-Fi or Ethernet Connection" section in
+     * esp-idf/examples/protocols/README.md for more information about this function.
+     * Use CONFIG_EXAMPLE_WIFI_SSID and CONFIG_EXAMPLE_WIFI_PASSWORD to change
+     * Wi-Fi credentials.
+     */
+    ESP_ERROR_CHECK(example_connect());
 
     /* This initializes SNTP for time synchronization.
      * ESP Insights uses relative time since bootup if time is not synchronized and
