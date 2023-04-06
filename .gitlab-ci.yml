@@ -204,7 +204,7 @@ push_master_to_github:
   when: on_success
   dependencies: []
   only:
-    - master
+    - main
   script:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
