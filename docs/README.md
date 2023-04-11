@@ -4,13 +4,12 @@ This folder contains source files of **ESP Insights API documentation**.
 
 # Hosted Documentation
 
-[TODO]: <> (Fix the link)
-* Check here: https://insights.espressif.com/docs/c-apis/en/latest
+* Check the following link for the documentation: https://docs.espressif.com/projects/esp-insights
 
 The above URL is for the main branch latest version.
 
 # Building Documentation
 
-* Install `make` and `doxygen` for your platform (`make` may already be installed as an ESP-IDF prerequisite).
-* Change to the docs directory and run `make html`
-* `make` will probably prompt you to run a python pip install step to get some other Python-related prerequisites. Run the command as shown, then re-run `make html` to build the docs.
+* ESP-Insights uses esp-docs for building the docs.
+* Change to the docs directory and run `build-docs -l en -t esp32`
+* To understand more about ESP-Docs, please follow https://docs.espressif.com/projects/esp-docs.

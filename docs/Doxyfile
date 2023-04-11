@@ -22,15 +22,15 @@ PROJECT_NAME = "ESP Insights Programming Guide"
 
 INPUT = \
     ## ESP Insights
-    ../components/esp_insights/include/esp_insights.h \
+    $(PROJECT_PATH)/components/esp_insights/include/esp_insights.h \
     ## ESP Diagnostics
-    ../components/esp_diagnostics/include/esp_diagnostics.h \
-    ../components/esp_diagnostics/include/esp_diagnostics_metrics.h \
-    ../components/esp_diagnostics/include/esp_diagnostics_variables.h \
-    ../components/esp_diagnostics/include/esp_diagnostics_system_metrics.h \
-    ../components/esp_diagnostics/include/esp_diagnostics_network_variables.h \
+    $(PROJECT_PATH)/components/esp_diagnostics/include/esp_diagnostics.h \
+    $(PROJECT_PATH)/components/esp_diagnostics/include/esp_diagnostics_metrics.h \
+    $(PROJECT_PATH)/components/esp_diagnostics/include/esp_diagnostics_variables.h \
+    $(PROJECT_PATH)/components/esp_diagnostics/include/esp_diagnostics_system_metrics.h \
+    $(PROJECT_PATH)/components/esp_diagnostics/include/esp_diagnostics_network_variables.h \
     ## RTC Store
-    ../components/rtc_store/include/rtc_store.h
+    $(PROJECT_PATH)/components/esp_diag_data_store/include/esp_diag_data_store.h
 
 ## Get warnings for functions that have no documentation for their parameters or return value
 ##
@@ -41,11 +41,13 @@ WARN_NO_PARAMDOC = YES
 ENABLE_PREPROCESSING = YES
 MACRO_EXPANSION      = YES
 EXPAND_ONLY_PREDEF   = YES
-PREDEFINED           = CONFIG_DIAG_ENABLE_METRICS=1 \
-                       CONFIG_DIAG_ENABLE_VARIABLES=1 \
-                       CONFIG_DIAG_ENABLE_NETWORK_VARIABLES=1 \
-                       CONFIG_DIAG_ENABLE_HEAP_METRICS=1 \
-                       CONFIG_DIAG_ENABLE_WIFI_METRICS=1
+PREDEFINED           = \
+    $(ENV_DOXYGEN_DEFINES) \
+    CONFIG_DIAG_ENABLE_METRICS=1 \
+    CONFIG_DIAG_ENABLE_VARIABLES=1 \
+    CONFIG_DIAG_ENABLE_NETWORK_VARIABLES=1 \
+    CONFIG_DIAG_ENABLE_HEAP_METRICS=1 \
+    CONFIG_DIAG_ENABLE_WIFI_METRICS=1
 
 ## Extract all
 EXTRACT_ALL = YES
@@ -62,7 +64,7 @@ XML_OUTPUT      = xml
 GENERATE_HTML   = NO
 HAVE_DOT        = NO
 GENERATE_LATEX  = NO
-GENERATE_MAN    = NO
+GENERATE_MAN    = YES
 GENERATE_RTF    = NO
 
 ## Skip distracting progress messages
@@ -71,4 +73,3 @@ QUIET = YES
 ## Log warnings in a file for further review
 ##
 WARN_LOGFILE = "_build/doxygen-warning-log.txt"
-

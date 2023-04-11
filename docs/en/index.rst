@@ -5,6 +5,10 @@ ESP Insights is a remote diagnostics solution that allows users to remotely moni
 This is the C API (for firmware) documentation for ESP Insights.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
 
-   C APIs <c-apis/index>
+   esp_insights.rst
+   esp_diagnostics.rst
+   esp_diag_metrics.rst
+   esp_diag_variables.rst
+   esp_diag_data_store.rst
