@@ -19,7 +19,7 @@ before_script:
   - echo -e "Host gitlab.espressif.cn\n\tStrictHostKeyChecking no\n" >> ~/.ssh/config
   # Create insights-bins-${CI_JOB_ID}/ dir (to copy binaries into for artifacts)
   - mkdir -p $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}
-  
+
 .setup_idf: &setup_idf
   - echo Checking git version
   - git --version
@@ -34,7 +34,7 @@ before_script:
   - source export.sh
   - echo Running export.sh - Done
   - export PYTHONPATH=$IDF_PATH/tools/ci/python_packages:$PYTHONPATH
-  - cd $CI_PROJECT_DIR/components/rtc_store/test/python_tests
+  - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
   - pip install -r python_test_requirement.txt
 
 .build_minimal_diagnostics: &build_minimal_diagnostics
@@ -147,25 +147,25 @@ unit_tests:
   before_script: []
   stage: test
   timeout: 2 hours
-  tags: 
+  tags:
     - idf_unit_test_runner
   script:
-      - *setup_idf    
-      - echo IDF PATH is $IDF_PATH     
+      - *setup_idf
+      - echo IDF PATH is $IDF_PATH
       - cd $IDF_PATH/tools/unit-test-app
       # Clean any previous configuration and builds
       - rm -rf build sdkconfig $IDF_PATH/TEST_LOGS
       # Append `/path/to/esp-insights/components` directory to `EXTRA_COMPONENT_DIRS` in `CMakeLists.txt`
       - gsed -i '4ilist(APPEND EXTRA_COMPONENT_DIRS "$ENV{IDF_PATH}/../../esp-insights/components")' CMakeLists.txt
-      - echo CONFIG_DIAG_DATA_STORE_RTC=y >> $IDF_PATH/tools/unit-test-app/sdkconfig.defaults            
-      - idf.py set-target esp32      
-      - idf.py -T rtc_store build
+      - echo CONFIG_DIAG_DATA_STORE_RTC=y >> $IDF_PATH/tools/unit-test-app/sdkconfig.defaults
+      - idf.py set-target esp32
+      - idf.py -T esp_diag_data_store build
       # test application will be flashed in following step only
-      - ./unit_test.py "data store init deinit" "data store write" "data store write read release_all" 
+      - ./unit_test.py "data store init deinit" "data store write" "data store write read release_all"
         "data store wrapped_read write_till_exact_full" "data store write read release_zero read release_zero release_all"
         "data store validate data in RTC after crash"
       # Run python test cases
-      - cd $CI_PROJECT_DIR/components/rtc_store/test/python_tests
+      - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
       - python3 stress_tests.py --password=${PASSWORD} --username=${USERNAME} --base_uri=${BASE_URI} --diag_uri=${DIAG_URI}
       # report generation
       - echo ******* Report Generation Started **********
@@ -174,7 +174,7 @@ unit_tests:
       - rm -rf test_report
       - mkdir test_report
       # Convert xml reports to html format
-      - junit2html components/rtc_store/test/python_tests/*.xml test_report/python_test_results.html
+      - junit2html components/esp_diag_data_store/test/python_tests/*.xml test_report/python_test_results.html
       - cd $IDF_PATH/TEST_LOGS
       - result_xml=$(find . -type f -name '*.xml')
       - junit2html $result_xml $CI_PROJECT_DIR/test_report/result.html
