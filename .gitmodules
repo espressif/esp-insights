@@ -4,6 +4,3 @@
 [submodule "components/rmaker_common"]
 	path = components/rmaker_common
 	url = ../esp-rainmaker-common.git
-[submodule "components/cbor/tinycbor"]
-	path = components/cbor/tinycbor
-	url = https://github.com/intel/tinycbor.git

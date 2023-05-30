@@ -97,6 +97,7 @@ before_script:
     - patch -p1 < Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch
     - fi
     - cd -
+    - pip install --upgrade idf-component-manager
     # build example
     - for APP in $APP_BUILD; do
     - if [[ "$APP_BUILD" == "all" || "$APP" == "minimal_diagnostics" ]]; then

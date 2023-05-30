@@ -1,0 +1,3 @@
+version: "1.0.0"
+description: Diagnostics component used in ESP Insights, which is a remote diagnostics solution to monitor the health of ESP devices in the field.
+url: https://github.com/espressif/esp-insights/tree/main/components/esp_diagnostics

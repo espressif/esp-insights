@@ -1,0 +1,3 @@
+version: "1.0.0"
+description: Simple APIs to use ESP Diagnostics data storage
+url: https://github.com/espressif/esp-insights/tree/main/components/esp_diag_data_store
