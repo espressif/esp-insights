@@ -3,6 +3,7 @@ set(srcs "src/esp_insights.c"
         "src/esp_insights_transport.c"
         "src/esp_insights_client_data.c"
         "src/esp_insights_encoder.c"
+        "src/esp_insights_cbor_decoder.c"
         "src/esp_insights_cbor_encoder.c")
 
 set(priv_req cbor rmaker_common esptool_py espcoredump esp_diag_data_store nvs_flash)
