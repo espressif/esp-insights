@@ -55,5 +55,4 @@ menu "ESP Insights"
             There is a dynamic logic to decide the next timeout when the insights data will be reported.
             It depends on whether the data was sent or not during the previous timeout.
             If the data was sent, the next timeout is doubled and if not, it is halved.
-
 endmenu

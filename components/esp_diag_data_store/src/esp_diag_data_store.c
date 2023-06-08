@@ -24,6 +24,11 @@ typedef esp_err_t (*nc_write_cb_t) (const char *dg, void *data, size_t len);
 typedef int (*read_cb_t) (uint8_t *buf, size_t size);
 /* Callback type to release the data */
 typedef esp_err_t (*release_cb_t) (size_t size);
+/* Callback type to get CRC of data store configuration.
+This crc will be used to discard data from data store if its value is changed */
+typedef uint32_t (*crc_cb_t) ();
+/* Callback type to discard data from data store. */
+typedef esp_err_t (*discard_data_cb_t) ();
 
 typedef struct {
     init_cb_t init;
@@ -34,6 +39,8 @@ typedef struct {
     read_cb_t non_critical_read;
     release_cb_t critical_release;
     release_cb_t non_critical_release;
+    crc_cb_t data_store_crc;
+    discard_data_cb_t discard_data;
 } data_store_cbs_t;
 
 typedef struct {
@@ -60,6 +67,8 @@ static void set_diag_store_cbs(void)
     s_priv_data.cbs.non_critical_read = rtc_store_non_critical_data_read;
     s_priv_data.cbs.critical_release = rtc_store_critical_data_release;
     s_priv_data.cbs.non_critical_release = rtc_store_non_critical_data_release;
+    s_priv_data.cbs.data_store_crc = rtc_store_get_crc;
+    s_priv_data.cbs.discard_data = rtc_store_discard_data;
 }
 
 static void unset_diag_store_cbs(void)
@@ -72,6 +81,8 @@ static void unset_diag_store_cbs(void)
     s_priv_data.cbs.non_critical_read = NULL;
     s_priv_data.cbs.critical_release = NULL;
     s_priv_data.cbs.non_critical_release = NULL;
+    s_priv_data.cbs.data_store_crc = NULL;
+    s_priv_data.cbs.discard_data = NULL;
 }
 
 esp_err_t esp_diag_data_store_critical_write(void *data, size_t len)
@@ -127,4 +138,16 @@ void esp_diag_data_store_deinit(void)
     s_priv_data.cbs.deinit();
     unset_diag_store_cbs();
     s_priv_data.init = false;
+}
+
+uint32_t esp_diag_data_store_get_crc(void)
+{
+    CHECK_STORE_INIT(ESP_ERR_INVALID_STATE);
+    return s_priv_data.cbs.data_store_crc();
+}
+
+esp_err_t esp_diag_data_discard_data(void)
+{
+    CHECK_STORE_INIT(ESP_ERR_INVALID_STATE);
+    return s_priv_data.cbs.discard_data();
 }

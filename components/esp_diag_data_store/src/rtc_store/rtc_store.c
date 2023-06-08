@@ -24,6 +24,8 @@
 
 #include <esp_diag_data_store.h>
 #include "rtc_store.h"
+#include <esp_crc.h>
+#include <inttypes.h>
 
 #if __has_include("esp_idf_version.h")
 #include "esp_idf_version.h"
@@ -35,7 +37,7 @@
 #endif
 
 #define TAG "RTC_STORE"
-
+#define INSIGHTS_NVS_NAMESPACE "storage"
 /**
  * @brief Manages RTC store for critical and non_critical data
  *
@@ -121,6 +123,14 @@ typedef struct {
     rtc_store_meta_header_t meta[RTC_STORE_MAX_META_RECORDS];
     uint8_t meta_hdr_idx;
 } rtc_store_t;
+
+typedef struct {
+    uint8_t *critical_buf;
+    uint8_t *non_critical_buf;
+    rtc_store_t *rtc_store;
+    size_t critical_buf_size;
+    size_t non_critical_buf_size;
+} rtc_store_meta_info_t;
 
 static rtc_store_priv_data_t s_priv_data;
 RTC_NOINIT_ATTR static rtc_store_t s_rtc_store;
@@ -532,7 +542,7 @@ static esp_err_t rtc_store_meta_hdr_init()
 
     nvs_handle_t nvs_handle;
     // Open NVS and read our values
-    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+    err = nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
     if (err != ESP_OK) {
         printf("%s: Error (%s) opening NVS handle!\n", TAG, esp_err_to_name(err));
         goto skip_nvs_read_write;
@@ -565,6 +575,35 @@ skip_nvs_read_write:
     s_priv_data.meta_hdr->boot_cnt = boot_cnt;
 
     return ESP_OK;
+}
+
+esp_err_t rtc_store_discard_data(void)
+{
+    if (!s_priv_data.init) {
+        ESP_LOGW(TAG, "RTC Store not initialized yet. Cannot discard data.");
+        return ESP_ERR_INVALID_STATE;
+    }
+    xSemaphoreTake(s_priv_data.critical.lock, portMAX_DELAY);
+    s_rtc_store.critical.store.info.value = 0;
+    xSemaphoreGive(s_priv_data.critical.lock);
+    xSemaphoreTake(s_priv_data.non_critical.lock, portMAX_DELAY);
+    s_rtc_store.non_critical.store.info.value = 0;
+    xSemaphoreGive(s_priv_data.non_critical.lock);
+    return ESP_OK;
+}
+
+uint32_t rtc_store_get_crc()
+{
+    rtc_store_meta_info_t rtc_meta_info = {
+        .critical_buf = s_rtc_store.critical.buf,
+        .non_critical_buf = s_rtc_store.non_critical.buf,
+        .rtc_store = &s_rtc_store,
+        .critical_buf_size = DIAG_CRITICAL_BUF_SIZE,
+        .non_critical_buf_size = DIAG_NON_CRITICAL_BUF_SIZE
+    };
+    uint32_t crc = 0;
+    crc = esp_crc32_le(crc, (const unsigned char *)&rtc_meta_info, sizeof(rtc_meta_info));
+    return crc;
 }
 
 esp_err_t rtc_store_init(void)

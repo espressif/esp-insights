@@ -25,7 +25,7 @@
 #define TAG              "diag_data_store_UT"
 #define NVS_KEY_B1_CHARS "b1_chars"
 #define NVS_KEY_B2_CHARS "b2_chars"
-
+#define INSIGHTS_NVS_NAMESPACE  "nvs"
 #define READ_DATA_SIZE  CONFIG_RTC_STORE_DATA_SIZE
 static uint8_t data[READ_DATA_SIZE];
 
@@ -225,7 +225,7 @@ static char *nvs_read_chars(size_t *len, uint32_t bank)
 {
     nvs_handle_t handle;
     const char *key = (bank == 1) ? NVS_KEY_B1_CHARS : NVS_KEY_B2_CHARS ;
-    TEST_ASSERT(nvs_open("nvs", NVS_READWRITE, &handle) == ESP_OK);
+    TEST_ASSERT(nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK);
     TEST_ASSERT(nvs_get_blob(handle, key, NULL, len) == ESP_OK);
 
     char *chars = calloc(1, *len);
@@ -239,7 +239,7 @@ static void nvs_write_chars(char *chars, size_t len, uint32_t bank)
 {
     nvs_handle_t handle;
     const char *key = (bank == 1) ? NVS_KEY_B1_CHARS : NVS_KEY_B2_CHARS ;
-    TEST_ASSERT(nvs_open("nvs", NVS_READWRITE, &handle) == ESP_OK);
+    TEST_ASSERT(nvs_open(INSIGHTS_NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK);
     TEST_ASSERT(nvs_set_blob(handle, key, chars, len) == ESP_OK);
     nvs_commit(handle);
     nvs_close(handle);

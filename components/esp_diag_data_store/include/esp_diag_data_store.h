@@ -105,7 +105,19 @@ esp_err_t esp_diag_data_store_init(void);
  */
 void esp_diag_data_store_deinit(void);
 
+/**
+ * @brief Get CRC of diagnostics data store configuration
+ *
+ * @return crc
+ */
+uint32_t esp_diag_data_store_get_crc(void);
+
+/**
+ * @brief Discard values from diagnostics data store. This API should be called after esp_diag_data_store_init();
+ *
+ * @return ESP_OK on success, appropriate error on failure.
+ */
+esp_err_t esp_diag_data_discard_data(void);
 #ifdef __cplusplus
 }
 #endif
-
