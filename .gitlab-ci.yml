@@ -56,7 +56,6 @@ before_script:
   - echo Building diagnostics_smoke_test app - Started
   - ls
   - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
-
   # Build this example for HTTPS transport, insights_auth_key.txt file is required
   - touch main/insights_auth_key.txt
   - for TARGET in $EXAMPLE_TARGETS; do
@@ -146,13 +145,17 @@ build_idf_v4.1.2:
 
 unit_tests:
   before_script: []
+  variables:
+    TEST_CONFIG_PATH: $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests/env_config.yml
   stage: test
   timeout: 2 hours
   tags:
     - idf_unit_test_runner
   script:
       - *setup_idf
-      - echo IDF PATH is $IDF_PATH
+      # update value of usb port in env config file
+      - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
+      - yq eval ".default.unit-test-app = \"$UT_USB_PORT\"" -i "env_config.yml"
       - cd $IDF_PATH/tools/unit-test-app
       # Clean any previous configuration and builds
       - rm -rf build sdkconfig $IDF_PATH/TEST_LOGS
@@ -164,26 +167,25 @@ unit_tests:
       # test application will be flashed in following step only
       - ./unit_test.py "data store init deinit" "data store write" "data store write read release_all"
         "data store wrapped_read write_till_exact_full" "data store write read release_zero read release_zero release_all"
-        "data store validate data in RTC after crash"
-      # Run python test cases
+        "data store validate data in RTC after crash" --env_config_file $TEST_CONFIG_PATH
+      # Flash diagnostics smoke test example and run the tests
+      - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
+      # Clean any previous configuration and builds
+      - rm -rf build sdkconfig
+      # update WIFI details
+      - echo 'CONFIG_EXAMPLE_WIFI_SSID="ES_Staff"' >> sdkconfig.defaults
+      - echo 'CONFIG_EXAMPLE_WIFI_PASSWORD="ES@puba45"' >> sdkconfig.defaults
+      - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
+      - echo $InsightsAuthKeyToken > main/insights_auth_key.txt || true
+      - idf.py build flash -p $UT_USB_PORT
       - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
+       # Run python test cases
       - python3 stress_tests.py --password=${PASSWORD} --username=${USERNAME} --base_uri=${BASE_URI} --diag_uri=${DIAG_URI}
-      # report generation
-      - echo ******* Report Generation Started **********
-      - cd $CI_PROJECT_DIR
-      # Delete existing test_report directory if any and create new one
-      - rm -rf test_report
-      - mkdir test_report
-      # Convert xml reports to html format
-      - junit2html components/esp_diag_data_store/test/python_tests/*.xml test_report/python_test_results.html
-      - cd $IDF_PATH/TEST_LOGS
-      - result_xml=$(find . -type f -name '*.xml')
-      - junit2html $result_xml $CI_PROJECT_DIR/test_report/result.html
-      - echo ******* Report Generation Finished **********
+
   artifacts:
     name: "Test_Reports"
     paths:
-      - $CI_PROJECT_DIR/test_report/*.html
+      - $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests/*html
 
 push_master_to_github:
   stage: deploy
