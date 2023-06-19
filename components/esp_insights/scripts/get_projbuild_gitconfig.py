@@ -21,8 +21,8 @@ PROJ_VER=sys.argv[3]
 FILENAME=sys.argv[4]
 # Input IDF_PATH from CMakeLists.txt
 IDF_PATH=sys.argv[5]
-# Input target
-TARGET=sys.argv[6]
+# Toolchain Prefix
+TOOLCHAIN_PREFIX=sys.argv[6]
 
 NEWLINE = "\n"
 
@@ -44,7 +44,7 @@ def _set_submodule_cfg(submodules, repo_name):
     NAME_STR = "name"
     VERSION_STR = "version"
     CONFIG[repo_name][CFG_TITLE] = []
-    
+
     if submodules:
         # Get the submodule name and version
         submodules_list = submodules.strip().split(NEWLINE)
@@ -83,13 +83,9 @@ def set_cfg(config_name):
         submodules = run_cmd(SUBMODULE)
         _set_submodule_cfg(submodules, repo_name)
     elif config_name == "toolchain":
-        # Set config for Toolchain Version
-        arch_target = "xtensa-" + TARGET
-        if TARGET == "esp32c3" or TARGET == "esp32c2" or TARGET == "esp32h2":
-            arch_target = "riscv32-esp"
         # Get toolchain version
         TOOLCHAIN_STR = "toolchain"
-        TOOLCHAIN = arch_target + '-elf-gcc --version'
+        TOOLCHAIN = TOOLCHAIN_PREFIX + 'gcc --version'
         toolchain = run_cmd(TOOLCHAIN)
         CONFIG[TOOLCHAIN_STR] = toolchain.strip().split(NEWLINE)[0]
 
