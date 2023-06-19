@@ -10,7 +10,7 @@ if(CONFIG_ESP_INSIGHTS_ENABLED)
 add_custom_command(
         TARGET app
         POST_BUILD
-        COMMAND ${python} ${CMAKE_CURRENT_LIST_DIR}/scripts/get_projbuild_gitconfig.py ${PROJECT_DIR} ${CMAKE_PROJECT_NAME} ${PROJECT_VER} ${build_dir}/${PROJ_BUILD_CONFIG_FILE} ${idf_path} ${target}
+        COMMAND ${python} ${CMAKE_CURRENT_LIST_DIR}/scripts/get_projbuild_gitconfig.py ${PROJECT_DIR} ${CMAKE_PROJECT_NAME} ${PROJECT_VER} ${build_dir}/${PROJ_BUILD_CONFIG_FILE} ${idf_path} ${_CMAKE_TOOLCHAIN_PREFIX}
         COMMAND ${CMAKE_COMMAND}
         -D BUILD_DIR=${build_dir}
         -D PROJECT_DIR=${PROJECT_DIR}
