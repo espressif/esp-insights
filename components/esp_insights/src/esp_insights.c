@@ -118,7 +118,7 @@ static void esp_insights_first_call(void *priv_data)
     esp_insights_entry_t *entry = (esp_insights_entry_t *)priv_data;
     esp_rmaker_work_queue_add_task(entry->work_fn, entry->priv_data);
     /* Start timer here so that the function is called periodically */
-    ESP_LOGI(TAG, "Scheduling Insights timer for %"PRIu32" seconds.", entry->cur_seconds);
+    ESP_LOGI(TAG, "Scheduling Insights timer for %" PRIu32 " seconds.", entry->cur_seconds);
     xTimerStart(entry->timer, 0);
 }
 
@@ -534,7 +534,7 @@ static void data_store_event_handler(void* arg, esp_event_base_t event_base,
         case ESP_DIAG_DATA_STORE_EVENT_CRITICAL_DATA_WRITE_FAIL:
             s_insights_data.log_write_fail_cnt++;
 #if INSIGHTS_DEBUG_ENABLED
-            ESP_LOGI(TAG, "Log write fail count: %"PRIu32, s_insights_data.log_write_fail_cnt);
+            ESP_LOGI(TAG, "Log write fail count: %" PRIu32, s_insights_data.log_write_fail_cnt);
 #endif
             break;
 

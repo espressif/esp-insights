@@ -61,7 +61,7 @@ static void smoke_test(void *arg)
             if (s_reset_count > MAX_CRASHES) {
                 ESP_DIAG_EVENT(TAG, "[count][%d]", count);
             } else {
-               ESP_LOGE(TAG, "[count][%d] [crash_count][%"PRIu32"] [excvaddr][0x0f] Crashing...", count, s_reset_count);
+               ESP_LOGE(TAG, "[count][%d] [crash_count][%" PRIu32 "] [excvaddr][0x0f] Crashing...", count, s_reset_count);
                *(int *)0x0F = 0x10;
            }
         }
