@@ -51,7 +51,7 @@ static void update_min_rssi(int32_t rssi)
     if (rssi < s_priv_data.min_rssi) {
         s_priv_data.min_rssi = rssi;
         esp_diag_metrics_add_int(KEY_MIN_RSSI, rssi);
-        ESP_LOGI(LOG_TAG, "Wi-Fi RSSI crossed threshold %"PRIi32"", rssi);
+        ESP_LOGI(LOG_TAG, "Wi-Fi RSSI crossed threshold %" PRIi32, rssi);
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
         esp_wifi_set_rssi_threshold(rssi);
 #endif
@@ -118,7 +118,7 @@ esp_err_t esp_diag_wifi_metrics_dump(void)
         RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_int(KEY_MIN_RSSI, s_priv_data.min_rssi), ESP_LOG_WARN, LOG_TAG,
                             "Failed to add Wi-Fi metrics key:" KEY_MIN_RSSI);
         s_priv_data.prev_rssi = rssi;
-        ESP_LOGI(LOG_TAG, "%s:%"PRIi32" %s:%"PRIi32"", KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
+        ESP_LOGI(LOG_TAG, "%s:%" PRIi32 " %s:%" PRIi32, KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
     if (!s_priv_data.status_sent) {
         // if for some reason we were not able to add the status, try again

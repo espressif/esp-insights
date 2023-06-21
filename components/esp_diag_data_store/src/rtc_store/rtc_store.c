@@ -187,14 +187,14 @@ static void rtc_store_write_complete(rbuf_data_t *rbuf_data, size_t len)
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
 #if RTC_STORE_DBG_PRINTS
-    ESP_LOGI(TAG, "before write_complete, filled %"PRIu16", size %u, read_offset %"PRIu16", len %u",
+    ESP_LOGI(TAG, "before write_complete, filled %" PRIu16 ", size %u, read_offset %" PRIu16 ", len %u",
              info->filled, rbuf_data->store->size, info->read_offset, len);
 #endif
 
     info->filled += len;
 
 #if RTC_STORE_DBG_PRINTS
-    ESP_LOGI(TAG, "after write_complete, filled %"PRIu16", size %u, read_offset %"PRIu16", len %u",
+    ESP_LOGI(TAG, "after write_complete, filled %" PRIu16 ", size %u, read_offset %" PRIu16 ", len %u",
              info->filled, rbuf_data->store->size, info->read_offset, len);
 #endif
 }
@@ -204,7 +204,7 @@ static size_t rtc_store_write_at_offset(rbuf_data_t *rbuf_data, void *data, size
 {
     data_store_info_t *info = (data_store_info_t *) &rbuf_data->store->info;
 #if RTC_STORE_DBG_PRINTS
-    ESP_LOGI(TAG, "(write_at_offset): size %u, available: %u, filled %u, read_ptr %"PRIu16", to_write %u",
+    ESP_LOGI(TAG, "(write_at_offset): size %u, available: %u, filled %u, read_ptr %" PRIu16 ", to_write %u",
              rbuf_data->store->size, data_store_get_free(rbuf_data->store),
              data_store_get_filled(rbuf_data->store), info->read_offset, len);
 #endif
