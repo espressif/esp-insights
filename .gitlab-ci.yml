@@ -24,7 +24,7 @@ before_script:
   - echo Checking git version
   - git --version
   - echo Cloning esp-idf - Started
-  - git clone --depth 1 --shallow-submodules --recursive --single-branch -b ${IDF_GIT_BRANCH} --reference-if-able /Users/espressif/local_reference/esp-idf https://gitlab-ci-token:${BOT_TOKEN}@gitlab.espressif.cn:6688/espressif/esp-idf.git
+  - git clone --depth 1 --shallow-submodules --recursive --single-branch -b ${IDF_GIT_BRANCH} --reference-if-able /Users/espressif/local_reference/esp-idf https://github.com/espressif/esp-idf.git
   - cd esp-idf
   - echo Cloning esp-idf - Done
   - echo Running install.sh - Started
