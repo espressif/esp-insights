@@ -14,8 +14,8 @@ jobs:
         uses: espressif/upload-components-ci-action@v1
         with:
           directories: >
-            components/esp_insights;
-            components/esp_diagnostics;
             components/esp_diag_data_store;
+            components/esp_diagnostics;
+            components/esp_insights;
           namespace: "espressif"
           api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
