@@ -427,6 +427,38 @@ void __wrap_log_printf(const char *format, ...)
     va_end(list);
 }
 #endif
+
+void esp_diag_log_writev(esp_log_level_t level,
+                         const char *tag,
+                         const char *format,
+                         va_list args)
+{
+#ifndef CONFIG_DIAG_LOG_DROP_WIFI_LOGS
+    /* Only collect logs with "wifi" tag */
+    if (strcmp(tag, "wifi") == 0) {
+        uint32_t pc = 0;
+        pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
+        esp_diag_log(level, pc, tag, format, args);
+    }
+#endif /* !CONFIG_DIAG_LOG_DROP_WIFI_LOGS */
+}
+
+void esp_diag_log_write(esp_log_level_t level,
+                        const char *tag,
+                        const char *format,
+                        va_list list)
+{
+#ifndef BOOTLOADER_BUILD
+    /* Logs with "wifi" tag, will be collected in esp_log_writev() */
+    if (strcmp(tag, "wifi") != 0) {
+        uint32_t pc = 0;
+        pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
+        esp_diag_log(level, pc, tag, format, list);
+    }
+#endif
+}
+
+#if !CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP
 /* Wrapping esp_log_write() and esp_log_writev() reduces the
  * changes required in esp_log module to support diagnostics
  */
@@ -440,15 +472,7 @@ void __wrap_esp_log_writev(esp_log_level_t level,
                            const char *format,
                            va_list args)
 {
-#ifndef CONFIG_DIAG_LOG_DROP_WIFI_LOGS
-    /* Only collect logs with "wifi" tag */
-    if (strcmp(tag, "wifi") == 0) {
-        uint32_t pc = 0;
-        pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
-        esp_diag_log(level, pc, tag, format, args);
-    }
-#endif /* !CONFIG_DIAG_LOG_DROP_WIFI_LOGS */
-
+    esp_diag_log_write(level, tag, format, args);
     __real_esp_log_writev(level, tag, format, args);
 }
 
@@ -458,14 +482,8 @@ void __wrap_esp_log_write(esp_log_level_t level,
 {
     va_list list;
     va_start(list, format);
-#ifndef BOOTLOADER_BUILD
-    /* Logs with "wifi" tag, will be collected in esp_log_writev() */
-    if (strcmp(tag, "wifi") != 0) {
-        uint32_t pc = 0;
-        pc = esp_cpu_process_stack_pc((uint32_t)__builtin_return_address(0));
-        esp_diag_log(level, pc, tag, format, list);
-    }
-#endif
+    esp_diag_log_writev(level, tag, format, list);
     esp_log_writev(level, tag, format, list);
     va_end(list);
 }
+#endif // CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP
