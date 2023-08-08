@@ -298,6 +298,39 @@ uint32_t esp_diag_meta_crc_get(void);
  */
 uint32_t esp_diag_data_size_get_crc(void);
 
+
+/**
+ * @brief Convenience API for ingesting log data into diagnostics when esp_log_writev() is externally wrapped.
+ *        This API should be called from __wrap_esp_log_writev(). \see CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP.
+ *
+ * @param[in] level  Log level
+ * @param[in] tag    Tag of the log
+ * @param[in] format Format of the log
+ * @param[in] v      Variable argument list
+ *
+ * @note The Diagnostics component wraps the esp_log_write() and esp_log_writev() APIs using the `--wrap` GCC option
+ *       to collect logs. If another component intends to wrap the logging APIs, enable the configuration option
+ *       CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP. This will prevent the Diagnostics component from wrapping the logging APIs.
+ *       To enable log diagnostics in such case, call the esp_diag_log_writev() and esp_diag_log_write() APIs within
+ *       their respective externally wrapped APIs.
+ *
+ * @note Avoid calling this API explicitly unless there is an use case as the one described above.
+ */
+void esp_diag_log_writev(esp_log_level_t level, const char *tag, const char *format, va_list v);
+
+/**
+ * @brief Convenience API for ingesting log data into diagnostics when esp_log_write() is externally wrapped.
+ *        This API should be called from __wrap_esp_log_write(). \see CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP.
+ *
+ * @param[in] level  Log level
+ * @param[in] tag    Tag of the log
+ * @param[in] format Format of the log
+ * @param[in] v      variable argument list
+ *
+ * @note Please see notes from \see esp_diag_log_writev()
+ */
+void esp_diag_log_write(esp_log_level_t level, const char *tag, const char *format, va_list v);
+
 #ifdef __cplusplus
 }
 #endif

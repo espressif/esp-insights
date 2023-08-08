@@ -96,4 +96,12 @@ menu "Diagnostics"
         default n
         help
             Enable more advanced network variables
+
+    config DIAG_USE_EXTERNAL_LOG_WRAP
+        bool "Use external log wrapper"
+        default n
+        help
+            Diagnostics component wraps the esp_log_write and esp_log_writev APIs using `--wrap` gcc option.
+            There can be scenario where another component also wants to wrap the logging functions.
+            In that case, enable this option and use the data ingestion APIs esp_diag_log_write and esp_diag_log_writev.
 endmenu

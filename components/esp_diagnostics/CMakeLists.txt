@@ -34,7 +34,9 @@ idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS "include"
                     PRIV_REQUIRES ${priv_req})
 
-set(WRAP_FUNCTIONS esp_log_write esp_log_writev)
+if(NOT CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP)
+    set(WRAP_FUNCTIONS esp_log_write esp_log_writev)
+endif()
 
 if(CONFIG_LIB_BUILDER_COMPILE)
     list(APPEND WRAP_FUNCTIONS log_printf)
