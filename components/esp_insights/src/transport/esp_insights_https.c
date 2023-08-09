@@ -15,6 +15,7 @@
 #include <string.h>
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_event.h>
 #include <esp_http_client.h>
 #include <esp_insights.h>
 #include <esp_insights_internal.h>
@@ -137,6 +138,11 @@ static int esp_insights_https_data_send(void *data, size_t len)
         } else {
             ESP_LOGE(TAG, "API response status = %d", status);
         }
+    }
+    if (msg_id == 0) {
+        esp_event_post(INSIGHTS_EVENT, INSIGHTS_EVENT_TRANSPORT_SEND_SUCCESS, NULL, 0, portMAX_DELAY);
+    } else {
+        esp_event_post(INSIGHTS_EVENT, INSIGHTS_EVENT_TRANSPORT_SEND_FAILED, NULL, 0, portMAX_DELAY);
     }
 cleanup:
     esp_http_client_cleanup(client);
