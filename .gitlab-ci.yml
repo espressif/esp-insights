@@ -8,6 +8,8 @@ variables:
   MAKEFLAGS: "-j8 --no-keep-going"
   APP_BUILD: "all"
   GIT_SUBMODULE_STRATEGY: recursive
+  ESP_DOCS_ENV_IMAGE: "$CI_DOCKER_REGISTRY/esp-idf-doc-env-v5.0:2-2"
+  ESP_DOCS_PATH: "$CI_PROJECT_DIR"
 
 before_script:
   # add gitlab ssh key
@@ -187,7 +189,71 @@ unit_tests:
     paths:
       - $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests/*html
 
-push_master_to_github:
+build_docs:
+  stage: build
+  image: $ESP_DOCS_ENV_IMAGE
+  tags:
+    - build_docs
+  artifacts:
+    paths:
+      - docs/_build/*/*/*.txt
+      - docs/_build/*/*/html/*
+    expire_in: 4 days
+  # No cleaning when the artifacts
+  after_script: []
+  script:
+    - cd docs
+    - pip install -r requirements.txt
+    - build-docs -l en -t esp32
+
+.deploy_docs_template:
+  stage: deploy
+  image: $ESP_DOCS_ENV_IMAGE
+  tags:
+    - deploy_docs
+  needs:
+    - build_docs
+  only:
+    changes:
+      - "docs/**/*"
+  script:
+    - source ${CI_PROJECT_DIR}/docs/utils.sh
+    - add_doc_server_ssh_keys $DOCS_DEPLOY_PRIVATEKEY $DOCS_DEPLOY_SERVER $DOCS_DEPLOY_SERVER_USER
+    - export GIT_VER=$(git describe --always)
+    - pip install -r ${CI_PROJECT_DIR}/docs/requirements.txt
+    - deploy-docs
+
+deploy_docs_preview:
+  extends:
+    - .deploy_docs_template
+  except:
+    refs:
+      - main
+  variables:
+    TYPE: "preview"
+    DOCS_BUILD_DIR: "${CI_PROJECT_DIR}/docs/_build/"
+    DOCS_DEPLOY_PRIVATEKEY: "$DOCS_PREVIEW_PRIVATEKEY"
+    DOCS_DEPLOY_SERVER: "$DOCS_PREVIEW_SERVER"
+    DOCS_DEPLOY_SERVER_USER: "$DOCS_PREVIEW_USER"
+    DOCS_DEPLOY_PATH: "$DOCS_PREVIEW_PATH"
+    DOCS_DEPLOY_URL_BASE: "$DOCS_PREVIEW_URL_BASE"
+
+deploy_docs_production:
+  extends:
+    - .deploy_docs_template
+  only:
+    refs:
+      - main
+  variables:
+    TYPE: "production"
+    DOCS_BUILD_DIR: "${CI_PROJECT_DIR}/docs/_build/"
+    DOCS_DEPLOY_PRIVATEKEY: "$DOCS_PROD_PRIVATEKEY"
+    DOCS_DEPLOY_SERVER: "$DOCS_PROD_SERVER"
+    DOCS_DEPLOY_SERVER_USER: "$DOCS_PROD_USER"
+    DOCS_DEPLOY_PATH: "$DOCS_PROD_PATH"
+    DOCS_DEPLOY_URL_BASE: "$DOCS_PROD_URL_BASE"
+
+push_main_to_github:
   stage: deploy
   image: espressif/idf:release-v5.0
   tags:

@@ -1,16 +1,9 @@
-// Copyright 2021 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #pragma once
 #include <stdint.h>
 #include <esp_err.h>
@@ -22,10 +15,12 @@ extern "C"
 {
 #endif
 
+/** @cond **/
 /**
  * @brief Insights event base
  */
 ESP_EVENT_DECLARE_BASE(INSIGHTS_EVENT);
+/** @endcond **/
 
 /**
  * @brief ESP Insights configuration
@@ -129,7 +124,7 @@ typedef struct {
 
 /**
  * @brief Initialize ESP Insights.
- * 
+ *
  * This initializes ESP Insights with the transport (HTTPS/MQTT) as per the sdkconfig.
  * To override the transport configuration, please use esp_insights_transport_register()
  * and esp_insights_enable().
@@ -142,16 +137,16 @@ esp_err_t esp_insights_init(esp_insights_config_t *config);
 
 /**
  * @brief Deinitialize ESP Insights.
- * 
- * Disconnects the registered transport and disables ESP Insights 
+ *
+ * Disconnects the registered transport and disables ESP Insights
  */
 void esp_insights_deinit(void);
 
 /**
- * @brief Register insights transport. 
- * 
- * This function should be used only when default transport needs to be overridden. 
- * 
+ * @brief Register insights transport.
+ *
+ * This function should be used only when default transport needs to be overridden.
+ *
  * @note Call esp_insights_enable()
  * after registering your own transport to enable Insights.
  *
@@ -162,8 +157,8 @@ void esp_insights_deinit(void);
 esp_err_t esp_insights_transport_register(esp_insights_transport_config_t *config);
 
 /**
- * @brief Unregister insights transport. 
- * 
+ * @brief Unregister insights transport.
+ *
  * @note This API does not disable Insights.
  * Call esp_insights_disable() to turn off Insights.
  */
@@ -180,7 +175,7 @@ esp_err_t esp_insights_send_data(void);
 
 /**
  * @brief Enable ESP Insights except transport.
- * 
+ *
  * This API is used in conjunction with esp_insights_transport_register()
  * to start Insights with custom transport.
  *
@@ -191,17 +186,17 @@ esp_err_t esp_insights_send_data(void);
 esp_err_t esp_insights_enable(esp_insights_config_t *config);
 
 /**
- * @brief Disable ESP Insights. 
- * 
+ * @brief Disable ESP Insights.
+ *
  * This API does not unregister the transport.
- * 
+ *
  * @note Call esp_insights_transport_unregister() to remove the transport.
  */
 void esp_insights_disable(void);
 
 /**
  * @brief Returns pointer to the NULL terminated Node ID string.
- * 
+ *
  * @return Pointer to a NULL terminated Node ID string.
  */
 const char *esp_insights_get_node_id(void);

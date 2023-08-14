@@ -12,10 +12,12 @@
 extern "C" {
 #endif
 
+/** @cond **/
 /**
  * @brief Data store event base
  */
 ESP_EVENT_DECLARE_BASE(ESP_DIAG_DATA_STORE_EVENT);
+/** @endcond **/
 
 /**
  * @brief Data store events
