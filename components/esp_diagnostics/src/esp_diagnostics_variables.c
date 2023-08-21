@@ -28,7 +28,7 @@ typedef struct {
 
 static variables_priv_data_t s_priv_data;
 
-static const esp_diag_variable_meta_t *esp_diag_variable_meta_get(const char *tag, const char *key)
+static esp_diag_variable_meta_t *esp_diag_variable_meta_get(const char *tag, const char *key)
 {
     uint32_t i;
     if (!tag || !key) {
@@ -46,7 +46,7 @@ static const esp_diag_variable_meta_t *esp_diag_variable_meta_get(const char *ta
 
 #ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
 /* Checks only by key for registered variable. Use this for meta version < 1.1 */
-static const esp_diag_variable_meta_t *esp_diag_variable_meta_get_by_key(const char *key)
+static esp_diag_variable_meta_t *esp_diag_variable_meta_get_by_key(const char *key)
 {
     uint32_t i;
     if (!key) {
@@ -89,9 +89,39 @@ esp_err_t esp_diag_variable_register(const char *tag, const char *key,
     s_priv_data.variables[s_priv_data.variables_count].tag = tag;
     s_priv_data.variables[s_priv_data.variables_count].key = key;
     s_priv_data.variables[s_priv_data.variables_count].label = label;
+    s_priv_data.variables[s_priv_data.variables_count].unit = NULL;
     s_priv_data.variables[s_priv_data.variables_count].path = path;
     s_priv_data.variables[s_priv_data.variables_count].type = type;
     s_priv_data.variables_count++;
+    return ESP_OK;
+}
+
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
+esp_err_t esp_diag_variable_add_unit(const char *key, const char *unit)
+#else
+esp_err_t esp_diag_variable_add_unit(const char *tag, const char *key, const char *unit)
+#endif
+{
+    if (!key) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_variable_meta_t *variable = esp_diag_variable_meta_get_by_key(key);
+    if (!variable) {
+        ESP_LOGI(TAG, "var with (key %s) not found", key);
+        return ESP_ERR_NOT_FOUND;
+    }
+#else
+    esp_diag_variable_meta_t *variable = esp_diag_variable_meta_get(tag, key);
+    if (!variable) {
+        ESP_LOGI(TAG, "var with (tag %s, key %s) not found", tag, key);
+        return ESP_ERR_NOT_FOUND;
+    }
+#endif
+    variable->unit = unit;
     return ESP_OK;
 }
 

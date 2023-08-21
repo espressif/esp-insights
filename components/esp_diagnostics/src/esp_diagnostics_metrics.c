@@ -28,7 +28,7 @@ typedef struct {
 
 static metrics_priv_data_t s_priv_data;
 
-static const esp_diag_metrics_meta_t *esp_diag_metrics_meta_get(const char *tag, const char *key)
+static esp_diag_metrics_meta_t *esp_diag_metrics_meta_get(const char *tag, const char *key)
 {
     uint32_t i;
     if (!tag || !key) {
@@ -46,7 +46,7 @@ static const esp_diag_metrics_meta_t *esp_diag_metrics_meta_get(const char *tag,
 
 #ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
 /* Checks only by key for registered metric. Use this for meta version < 1.1 */
-static const esp_diag_metrics_meta_t *esp_diag_metrics_meta_get_by_key(const char *key)
+static esp_diag_metrics_meta_t *esp_diag_metrics_meta_get_by_key(const char *key)
 {
     uint32_t i;
     if (!key) {
@@ -89,9 +89,45 @@ esp_err_t esp_diag_metrics_register(const char *tag, const char *key,
     s_priv_data.metrics[s_priv_data.metrics_count].tag = tag;
     s_priv_data.metrics[s_priv_data.metrics_count].key = key;
     s_priv_data.metrics[s_priv_data.metrics_count].label = label;
+    s_priv_data.metrics[s_priv_data.metrics_count].unit = NULL;
     s_priv_data.metrics[s_priv_data.metrics_count].path = path;
     s_priv_data.metrics[s_priv_data.metrics_count].type = type;
     s_priv_data.metrics_count++;
+    return ESP_OK;
+}
+
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
+esp_err_t esp_diag_metrics_add_unit(const char *key, const char *unit)
+#else
+esp_err_t esp_diag_metrics_add_unit(const char *tag, const char *key, const char *unit)
+#endif
+{
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    if (!tag) {
+        return ESP_ERR_INVALID_ARG;
+    }
+#endif
+    if (!key) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_priv_data.init) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_metrics_meta_t *metrics = esp_diag_metrics_meta_get_by_key(key);
+    if (!metrics) {
+        ESP_LOGI(TAG, "metrics with (key %s) not found", key);
+        return ESP_ERR_NOT_FOUND;
+    }
+#else
+    esp_diag_metrics_meta_t *metrics = esp_diag_metrics_meta_get(tag, key);
+    if (!metrics) {
+        ESP_LOGI(TAG, "metrics with (tag %s, key %s) not found", tag, key);
+        return ESP_ERR_NOT_FOUND;
+    }
+#endif
+    metrics->unit = unit;
     return ESP_OK;
 }
 
