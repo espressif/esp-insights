@@ -537,6 +537,7 @@ esp_err_t esp_insights_cmd_resp_enable(void)
         goto enable_err;
     }
 
+    esp_insights_cbor_encoder_register_meta_cb(&esp_insights_cbor_reboot_msg_cb);
     ESP_LOGI(TAG, "Enabling Command-Response Module.");
 
     /* Register our config parsing command to cmd_resp module */
