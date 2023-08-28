@@ -24,6 +24,7 @@ static const char *TAG = "insights_cmd_resp";
 
 #include "esp_insights_internal.h"
 #include "esp_insights_cbor_decoder.h"
+#include "esp_insights_cbor_encoder.h"
 
 #define INS_CONF_STR            "config"
 #define RMAKER_CFG_TOPIC_SUFFIX "config"
@@ -34,10 +35,22 @@ static const char *TAG = "insights_cmd_resp";
  */
 #define INSIGHTS_CONF_CMD       0x101
 
-#define SCRATCH_BUF_SIZE (1 * 1024)
+/* depth is dictated by cmd_depth */
 #define MAX_CMD_DEPTH 10
+#define CMD_STORE_SIZE 10
+#define SCRATCH_BUF_SIZE (1 * 1024)
+
+typedef esp_err_t (*esp_insights_cmd_cb_t)(const void *data, size_t data_len, const void *priv);
 
 typedef struct {
+    const char *cmd[MAX_CMD_DEPTH];  /* complete path of the command */
+    int depth;
+    esp_insights_cmd_cb_t cb;        /* callback function */
+    void *prv_data;                  /* pointer to the private data */
+} generic_cmd_t;
+
+typedef struct {
+    generic_cmd_t cmd_store[CMD_STORE_SIZE];
     int cmd_cnt; /* total registered commands */
     uint8_t *scratch_buf;
     bool enabled;
@@ -45,6 +58,93 @@ typedef struct {
 } insights_cmd_resp_data_t;
 
 static insights_cmd_resp_data_t s_cmd_resp_data;
+static bool reboot_report_pending = false;
+
+static esp_err_t reboot_cmd_handler(const void *data, size_t data_len, const void *prv_data)
+{
+    reboot_report_pending = true;
+    ESP_LOGI(TAG, "rebooting in 5 seconds...");
+    esp_rmaker_reboot(5);
+    return ESP_OK;
+}
+
+static void __collect_reboot_meta(CborEncoder *map)
+{
+    cbor_encode_text_stringz(map, "reboot"); /* name of the config */
+    CborEncoder conf_map, conf_data_map;
+    cbor_encoder_create_map(map, &conf_map, CborIndefiniteLength);
+    cbor_encode_text_stringz(&conf_map, "c"); /* denotes this to be config */
+    cbor_encoder_create_map(&conf_map, &conf_data_map, CborIndefiniteLength);
+    cbor_encode_text_stringz(&conf_data_map, "type");
+    cbor_encode_uint(&conf_data_map, ESP_DIAG_DATA_TYPE_NULL); /* data_type */
+    cbor_encoder_close_container(&conf_map, &conf_data_map);
+    cbor_encoder_close_container(map, &conf_map);
+}
+
+static void __collect_reboot_data(CborEncoder *map)
+{
+    CborEncoder conf_map, key_arr;
+    cbor_encoder_create_map(map, &conf_map, CborIndefiniteLength);
+    cbor_encode_text_stringz(&conf_map, "n");
+    cbor_encoder_create_array(&conf_map, &key_arr, CborIndefiniteLength);
+    cbor_encode_text_stringz(&key_arr, "reboot");
+    cbor_encoder_close_container(&conf_map, &key_arr);
+    cbor_encode_text_stringz(&conf_map, "t");
+    cbor_encode_uint(&conf_map, esp_diag_timestamp_get());
+    cbor_encoder_close_container(map, &conf_map);
+}
+
+static void esp_insights_cbor_reboot_msg_cb(CborEncoder *map, insights_msg_type_t type)
+{
+    if (type == INSIGHTS_MSG_TYPE_META) {
+        __collect_reboot_meta(map);
+    } else if (reboot_report_pending) {
+        __collect_reboot_data(map);
+        reboot_report_pending = false;
+    }
+}
+
+esp_err_t esp_insights_cmd_resp_register_cmd(esp_insights_cmd_cb_t cb, void *prv_data, int cmd_depth, ...)
+{
+    int idx = s_cmd_resp_data.cmd_cnt;
+
+    va_list valist;
+    va_start(valist, cmd_depth);
+    for (int i = 0; i < cmd_depth; i++) {
+        s_cmd_resp_data.cmd_store[idx].cmd[i] = va_arg(valist, char *);
+    }
+    /* clean memory reserved for valist */
+    va_end(valist);
+
+    s_cmd_resp_data.cmd_store[idx].depth = cmd_depth;
+    s_cmd_resp_data.cmd_store[idx].prv_data = prv_data;
+    s_cmd_resp_data.cmd_store[idx].cb = cb;
+    s_cmd_resp_data.cmd_cnt += 1;
+
+    return ESP_OK;
+}
+
+static esp_err_t insights_cmd_resp_search_execute_cmd_store(char **cmd_tree, int cmd_depth)
+{
+    for(int i = 0; i< s_cmd_resp_data.cmd_cnt; i++) {
+        if (cmd_depth == s_cmd_resp_data.cmd_store[i].depth) {
+            bool match_found = true;
+            /* the command depth matches, now go for whole path */
+            for (int j = 0; j < cmd_depth; j++) {
+                if (strcmp(cmd_tree[j], s_cmd_resp_data.cmd_store[i].cmd[j]) != 0) {
+                    match_found = false;
+                    break; /* break at first mismatch */
+                }
+            }
+            if (match_found) {
+                ESP_LOGI(TAG, "match found in cmd_store... Executing the callback");
+                s_cmd_resp_data.cmd_store[i].cb(NULL, 0, s_cmd_resp_data.cmd_store[i].prv_data);
+                return ESP_OK;
+            }
+        }
+    }
+    return ESP_ERR_NOT_FOUND;
+}
 
 static void insights_cmd_parser_clear_cmd_tree(char *cmd_tree[])
 {
@@ -259,7 +359,10 @@ static esp_err_t esp_insights_cmd_resp_parse_one_entry(cbor_parse_ctx_t *ctx)
             break;
         }
     }
+
+    insights_cmd_resp_search_execute_cmd_store(cmd_tree, cmd_depth);
     insights_cmd_parser_clear_cmd_tree(cmd_tree);
+
     return ret;
 }
 
@@ -538,6 +641,9 @@ esp_err_t esp_insights_cmd_resp_enable(void)
     }
 
     esp_insights_cbor_encoder_register_meta_cb(&esp_insights_cbor_reboot_msg_cb);
+    /* register `reboot` command to our commands store */
+    esp_insights_cmd_resp_register_cmd(reboot_cmd_handler, NULL, 1, "reboot");
+
     ESP_LOGI(TAG, "Enabling Command-Response Module.");
 
     /* Register our config parsing command to cmd_resp module */
