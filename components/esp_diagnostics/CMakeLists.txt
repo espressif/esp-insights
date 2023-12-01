@@ -34,8 +34,10 @@ idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS "include"
                     PRIV_REQUIRES ${priv_req})
 
-if(NOT CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP)
-    set(WRAP_FUNCTIONS esp_log_write esp_log_writev)
+# If log level is set to NONE or if logging APIs are externally wrapped then skip
+# wrapping logging APIs here
+if ((NOT CONFIG_LOG_DEFAULT_LEVEL_NONE) AND (NOT CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP))
+    list(APPEND WRAP_FUNCTIONS esp_log_write esp_log_writev)
 endif()
 
 if(CONFIG_LIB_BUILDER_COMPILE)
