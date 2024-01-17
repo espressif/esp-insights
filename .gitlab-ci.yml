@@ -1,5 +1,6 @@
 stages:
   - build
+  - sync
   - test
   - deploy
 
@@ -10,6 +11,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   ESP_DOCS_ENV_IMAGE: "$CI_DOCKER_REGISTRY/esp-idf-doc-env-v5.0:2-2"
   ESP_DOCS_PATH: "$CI_PROJECT_DIR"
+  LOCAL_REFERENCE_PATH: "/Users/espressif/local_reference/esp-idf"
 
 before_script:
   # add gitlab ssh key
@@ -26,7 +28,7 @@ before_script:
   - echo Checking git version
   - git --version
   - echo Cloning esp-idf - Started
-  - git clone --depth 1 --shallow-submodules --recursive --single-branch -b ${IDF_GIT_BRANCH} --reference-if-able /Users/espressif/local_reference/esp-idf https://github.com/espressif/esp-idf.git
+  - git clone --depth 1 --shallow-submodules --recursive --single-branch -b ${IDF_GIT_BRANCH} --reference-if-able $LOCAL_REFERENCE_PATH https://github.com/espressif/esp-idf.git
   - cd esp-idf
   - echo Cloning esp-idf - Done
   - echo Running install.sh - Started
@@ -38,6 +40,39 @@ before_script:
   - export PYTHONPATH=$IDF_PATH/tools/ci/python_packages:$PYTHONPATH
   - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
   - pip install -r python_test_requirement.txt
+
+# function validates the xml report and convert it into html reports
+.validate_and_generate_html_reports: &validate_and_generate_html_reports
+  - echo $XML_REPORT_PATH
+  - echo $HTML_REPORT_DIR
+
+  # Get all XML files in the specified folder
+  - xml_reports=$(find "$XML_REPORT_PATH" -type f -name "*.xml")
+
+  # Check for failures in XML files
+  - failures=$(grep -e '<failure>' -e '<error>' $xml_reports || true)
+  - if [ -n "$failures" ]; then
+      echo "Tests failed. See console log for details.";
+      exit 1;
+    else
+      echo "All tests passed.";
+    fi
+
+  # Loop through each XML file and generate HTML report
+  - |
+    for xml_file in $xml_reports; do
+      # Generate HTML output path based on the specified directory
+      html_output="${HTML_REPORT_DIR}/$(basename "$xml_file" .xml).html"
+      junit2html "$xml_file" "$html_output"
+    done
+
+  # Check if any HTML report generation failed
+  - if [ $? -eq 0 ]; then
+      echo "HTML reports generated successfully.";
+    else
+      echo "Failed to generate HTML reports.";
+      exit 1;
+    fi
 
 .build_minimal_diagnostics: &build_minimal_diagnostics
   # Building minimal_diagnostics app - Started
@@ -156,49 +191,155 @@ build_idf_v4.1.2:
     EXAMPLE_TARGETS: esp32
     COMPONENT_MGR_142: "1"
 
-unit_tests:
+schedule_refresh_local_reference:
+  stage: sync
   before_script: []
-  variables:
-    TEST_CONFIG_PATH: $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests/env_config.yml
-  stage: test
-  timeout: 2 hours
+  dependencies: [] # no need to download artifacts from previous jobs
+  timeout: 20m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   tags:
     - idf_unit_test_runner
   script:
-      - *setup_idf
-      # update value of usb port in env config file
-      - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
-      - yq eval ".default.unit-test-app = \"$UT_USB_PORT\"" -i "env_config.yml"
-      - cd $IDF_PATH/tools/unit-test-app
-      # Clean any previous configuration and builds
-      - rm -rf build sdkconfig $IDF_PATH/TEST_LOGS
-      # Append `/path/to/esp-insights/components` directory to `EXTRA_COMPONENT_DIRS` in `CMakeLists.txt`
-      - gsed -i '4ilist(APPEND EXTRA_COMPONENT_DIRS "$ENV{IDF_PATH}/../../esp-insights/components")' CMakeLists.txt
-      - echo CONFIG_DIAG_DATA_STORE_RTC=y >> $IDF_PATH/tools/unit-test-app/sdkconfig.defaults
-      - idf.py set-target esp32
-      - idf.py -T esp_diag_data_store build
-      # test application will be flashed in following step only
-      - ./unit_test.py "data store init deinit" "data store write" "data store write read release_all"
-        "data store wrapped_read write_till_exact_full" "data store write read release_zero read release_zero release_all"
-        "data store validate data in RTC after crash" --env_config_file $TEST_CONFIG_PATH
-      # Flash diagnostics smoke test example and run the tests
-      - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
-      # Clean any previous configuration and builds
-      - rm -rf build sdkconfig
-      # update WIFI details
-      - echo 'CONFIG_EXAMPLE_WIFI_SSID="ES_Staff"' >> sdkconfig.defaults
-      - echo 'CONFIG_EXAMPLE_WIFI_PASSWORD="ES@puba45"' >> sdkconfig.defaults
-      - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
-      - echo $InsightsAuthKeyToken > main/insights_auth_key.txt || true
-      - idf.py build flash -p $UT_USB_PORT
-      - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
-       # Run python test cases
-      - python3 stress_tests.py --password=${PASSWORD} --username=${USERNAME} --base_uri=${BASE_URI} --diag_uri=${DIAG_URI}
+  - echo "Changing directory to $LOCAL_REFERENCE_PATH"
+  - cd $LOCAL_REFERENCE_PATH
+  - echo "Current branch:"
+  - git branch
+  - echo "Pulling latest changes..."
+  - git pull
+  - echo "Updating submodules..."
+  - git submodule update --init --recursive
+
+.stress_test_template:
+  before_script: []
+  variables:
+    UT_PASSWORD: $PROD_PASSWORD
+    UT_USERNAME: $PROD_USERNAME
+    UT_BASE_URI: $PROD_BASE_URI
+    UT_DIAG_URI: $PROD_DIAG_URI
+    UT_InsightsAuthKeyToken: $PROD_InsightsAuthKeyToken
+    PYTHON_TESTS_PATH: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests"
+    STRESS_TEST_REPORT_DIR: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/stress_test_report_$TARGET"
+  stage: test
+  timeout: 30m
+  tags:
+    - idf_unit_test_runner
+  script:
+    - *setup_idf
+    # Cleanup previous test artifacts
+    - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
+    - rm -f *.xml
+
+    # Build and flash diagnostics smoke test
+    - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
+    - rm -rf build sdkconfig
+    - echo 'CONFIG_EXAMPLE_WIFI_SSID="ES_Staff"' >> sdkconfig.defaults
+    - echo 'CONFIG_EXAMPLE_WIFI_PASSWORD="ES@puba45"' >> sdkconfig.defaults
+    - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
+    - echo $UT_InsightsAuthKeyToken > main/insights_auth_key.txt
+    - idf.py set-target $TARGET
+    - echo idf.py build flash -p $USB_PORT
+    - idf.py build flash -p $USB_PORT
+
+    # Run stress tests
+    - cd $PYTHON_TESTS_PATH
+    - echo "python3 stress_tests.py --password=${UT_PASSWORD} --username=${UT_USERNAME} --base_uri=${UT_BASE_URI} --diag_uri=${UT_DIAG_URI} --node_id=${UT_NODE_ID}"
+    - python3 stress_tests.py --password=${UT_PASSWORD} --username=${UT_USERNAME} --base_uri=${UT_BASE_URI} --diag_uri=${UT_DIAG_URI} --node_id=${UT_NODE_ID}
+
+    # Check XML reports generated by stress tests
+    - mkdir -p $STRESS_TEST_REPORT_DIR
+    - export XML_REPORT_PATH=$PYTHON_TESTS_PATH
+    - export HTML_REPORT_DIR=$STRESS_TEST_REPORT_DIR
+    - *validate_and_generate_html_reports
+  artifacts:
+    name: "stress_test_report_$TARGET"
+    paths:
+      - "$STRESS_TEST_REPORT_DIR"
+
+.unit_test_template:
+  before_script: []
+  variables:
+    UT_TEST_REPORT_DIR: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/unit_test_report_$TARGET"
+    PYTHON_TESTS_PATH: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests"
+  stage: test
+  timeout: 30m
+  tags:
+    - idf_unit_test_runner
+  script:
+    - *setup_idf
+    # Cleanup previous test artifacts
+    - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
+    - rm -rf "${IDF_PATH}/TEST_LOGS"
+
+    # Update configuration parameters, set USB port in env_config.yml
+    - yq eval ".default.unit-test-app = \"$USB_PORT\"" -i "env_config.yml"
+    - cat env_config.yml
+
+    # Build diagnostics smoke test with unit_tests
+    - cd "$IDF_PATH/tools/unit-test-app"
+    - echo idf.py set-target $TARGET
+    - idf.py set-target $TARGET
+    - rm -rf build sdkconfig "${IDF_PATH}/TEST_LOGS"
+    - gsed -i '4ilist(APPEND EXTRA_COMPONENT_DIRS "$ENV{IDF_PATH}/../../esp-insights/components")' CMakeLists.txt
+    - echo CONFIG_DIAG_DATA_STORE_RTC=y >> $IDF_PATH/tools/unit-test-app/sdkconfig.defaults
+    - idf.py -T esp_diag_data_store build
+
+    # Run unit tests
+    - ./unit_test.py "data store init deinit" "data store write" "data store write read release_all"
+      "data store wrapped_read write_till_exact_full" "data store write read release_zero read release_zero release_all"
+      "data store validate data in RTC after crash" --env_config_file "${PYTHON_TESTS_PATH}/env_config.yml"
+
+    # Check XML reports generated by unit tests
+    - mkdir -p $UT_TEST_REPORT_DIR
+    - export XML_REPORT_PATH="${IDF_PATH}/TEST_LOGS"
+    - export HTML_REPORT_DIR=$UT_TEST_REPORT_DIR
+    - *validate_and_generate_html_reports
 
   artifacts:
-    name: "Test_Reports"
+    name: "unit_test_report_$TARGET"
     paths:
-      - $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests/*html
+      - "$UT_TEST_REPORT_DIR"
+
+unit_test_esp32:
+  extends: .unit_test_template
+  dependencies: []
+  variables:
+    TARGET: "esp32"
+    USB_PORT: $ESP32_USB_PORT
+
+stress_test_esp32:
+  extends: .stress_test_template
+  needs:
+    - job: unit_test_esp32
+      artifacts: false
+  variables:
+    TARGET: "esp32"
+    USB_PORT: $ESP32_USB_PORT
+    UT_NODE_ID: $ESP32_NODE_ID
+
+#TODO: Investigate the method for passing the TARGET variable to the unit_test.py script.
+#TODO Once resolved, uncomment the "unit_test_esp32c3" job, replace needs field of job stress_test_esp32c3 with
+#TODO: job: unit_test_esp32c3 artifacts: false
+
+#unit_test_esp32c3:
+#  extends: .unit_test_template
+#  needs:
+#    - job: stress_test_esp32
+#      artifacts: false
+#  variables:
+#    TARGET: "esp32c3"
+#    USB_PORT: $ESP32C3_USB_PORT
+
+stress_test_esp32c3:
+  extends: .stress_test_template
+  needs:
+    - job: stress_test_esp32
+      artifacts: false
+  dependencies: []
+  variables:
+    TARGET: "esp32c3"
+    USB_PORT: $ESP32C3_USB_PORT
+    UT_NODE_ID: $ESP32C3_NODE_ID
 
 build_docs:
   stage: build
