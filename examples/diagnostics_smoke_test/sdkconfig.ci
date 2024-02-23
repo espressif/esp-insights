@@ -1,0 +1,4 @@
+#
+# Options enabled to be tested for ci
+#
+CONFIG_DIAG_MORE_NETWORK_VARS=y

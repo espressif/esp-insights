@@ -44,8 +44,8 @@ before_script:
   - echo Building minimal_diagnostics app - Started
   - ls
   - cd $CI_PROJECT_DIR/examples/minimal_diagnostics
-  # Build this for MQTT transport
-  - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
+  # Additional configs for CI build
+  - cat sdkconfig.ci >> sdkconfig.defaults
   - echo Running idf.py
   - idf.py build
   - echo Building minimal_diagnostics app - Done
@@ -60,6 +60,8 @@ before_script:
   - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
   # Build this example for HTTPS transport, insights_auth_key.txt file is required
   - touch main/insights_auth_key.txt
+  # Additional configs for CI build
+  - cat sdkconfig.ci >> sdkconfig.defaults
   - for TARGET in $EXAMPLE_TARGETS; do
   - echo Building diagnostics_smoke_test for $TARGET
   - idf.py set-target $TARGET
