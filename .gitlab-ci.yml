@@ -88,6 +88,7 @@ before_script:
     EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
     EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
     COREDUMP_PATCH: "0"
+    COMPONENT_MGR_142: "0" # Fix component manager version to 1.4.2
   artifacts:
     paths:
       - $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}.zip
@@ -100,7 +101,11 @@ before_script:
     - patch -p1 < Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch
     - fi
     - cd -
+    - if [[ "$COMPONENT_MGR_142" == "1" ]]; then
+    - pip install idf-component-manager==1.4.2
+    - else
     - pip install --upgrade idf-component-manager
+    - fi
     # build example
     - for APP in $APP_BUILD; do
     - if [[ "$APP_BUILD" == "all" || "$APP" == "minimal_diagnostics" ]]; then
@@ -123,6 +128,7 @@ build_idf_v4.4:
   image: espressif/idf:release-v4.4
   variables:
     EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
+    COMPONENT_MGR_142: "1"
 
 build_idf_v4.3:
   extends: .build_template
@@ -132,6 +138,7 @@ build_idf_v4.3:
     EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
     EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
     EXAMPLE_TARGETS: esp32 esp32s2 esp32c3
+    COMPONENT_MGR_142: "1"
 
 build_idf_v4.2.2:
   extends: .build_template
@@ -139,6 +146,7 @@ build_idf_v4.2.2:
   variables:
     COREDUMP_PATCH: "1"
     EXAMPLE_TARGETS: esp32
+    COMPONENT_MGR_142: "1"
 
 build_idf_v4.1.2:
   extends: .build_template
@@ -146,6 +154,7 @@ build_idf_v4.1.2:
   variables:
     COREDUMP_PATCH: "1"
     EXAMPLE_TARGETS: esp32
+    COMPONENT_MGR_142: "1"
 
 unit_tests:
   before_script: []
