@@ -316,7 +316,6 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     }
 #endif
     memset(&header, 0, sizeof(header));
-    header.dg = dg;
     header.len = len;
 
     // we have made sure of free size at this point, write index byte, data header and then actual data

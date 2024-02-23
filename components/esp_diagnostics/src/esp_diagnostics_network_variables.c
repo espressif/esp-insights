@@ -67,6 +67,8 @@ static void diag_add_more_wifi_vars()
     esp_wifi_get_protocol(WIFI_IF_STA, &wifi_protocol);
     esp_wifi_get_bandwidth(WIFI_IF_STA, &wifi_bw);
     esp_wifi_get_ps(&wifi_ps_type);
+
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
     esp_diag_variable_add_uint(KEY_PROTOCOL, wifi_protocol);
     esp_diag_variable_add_uint(KEY_BANDWIDTH, wifi_bw);
     esp_diag_variable_add_uint(KEY_POWER_SAVE, wifi_ps_type);
@@ -81,6 +83,22 @@ static void diag_add_more_wifi_vars()
     esp_wifi_get_bandwidth(WIFI_IF_AP, &wifi_bw);
     esp_diag_variable_add_uint(KEY_PROTOCOL_AP, wifi_protocol);
     esp_diag_variable_add_uint(KEY_BANDWIDTH_AP, wifi_bw);
+#else
+    esp_diag_variable_report_uint(TAG_WIFI, KEY_PROTOCOL, wifi_protocol);
+    esp_diag_variable_report_uint(TAG_WIFI, KEY_BANDWIDTH, wifi_bw);
+    esp_diag_variable_report_uint(TAG_WIFI, KEY_POWER_SAVE, wifi_ps_type);
+    if (wifi_bw == WIFI_BW_HT40) {
+        // not very useful for now, but will be useful for 5GHz band
+        uint8_t primary_ch = 0;
+        wifi_second_chan_t secondary_ch = WIFI_SECOND_CHAN_NONE;
+        esp_wifi_get_channel(&primary_ch, &secondary_ch);
+        esp_diag_variable_report_uint(TAG_WIFI, KEY_SECOND_CH, secondary_ch);
+    }
+    esp_wifi_get_protocol(WIFI_IF_AP, &wifi_protocol);
+    esp_wifi_get_bandwidth(WIFI_IF_AP, &wifi_bw);
+    esp_diag_variable_report_uint(TAG_WIFI, KEY_PROTOCOL_AP, wifi_protocol);
+    esp_diag_variable_report_uint(TAG_WIFI, KEY_BANDWIDTH_AP, wifi_bw);
+#endif
 }
 #endif
 
@@ -115,7 +133,7 @@ static void evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, vo
             {
                 s_priv_data.wifi_connected = true;
                 wifi_event_sta_connected_t *data = evt_data;
-
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
                 if (strncmp((char *)s_priv_data.prev_sta_data.ssid, (char *)data->ssid, data->ssid_len) != 0) {
                     esp_diag_variable_add_str(KEY_SSID, (char *)data->ssid);
                 }
@@ -128,6 +146,20 @@ static void evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, vo
                 if (s_priv_data.prev_sta_data.authmode != data->authmode) {
                     esp_diag_variable_add_uint(KEY_AUTHMODE, data->authmode);
                 }
+#else
+                if (strncmp((char *)s_priv_data.prev_sta_data.ssid, (char *)data->ssid, data->ssid_len) != 0) {
+                    esp_diag_variable_report_str(TAG_WIFI, KEY_SSID, (char *)data->ssid);
+                }
+                if (!bssid_matched(s_priv_data.prev_sta_data.bssid, data->bssid)) {
+                    esp_diag_variable_report_mac(TAG_WIFI, KEY_BSSID, data->bssid);
+                }
+                if (s_priv_data.prev_sta_data.channel != data->channel) {
+                    esp_diag_variable_report_int(TAG_WIFI, KEY_CHANNEL, data->channel);
+                }
+                if (s_priv_data.prev_sta_data.authmode != data->authmode) {
+                    esp_diag_variable_report_uint(TAG_WIFI, KEY_AUTHMODE, data->authmode);
+                }
+#endif
                 memcpy(&s_priv_data.prev_sta_data, data, sizeof(s_priv_data.prev_sta_data));
                 break;
             }
@@ -137,15 +169,24 @@ static void evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, vo
                     s_priv_data.wifi_connected = false;
                     wifi_event_sta_disconnected_t *data = evt_data;
                     s_priv_data.disconn_cnt++;
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
                     esp_diag_variable_add_int(KEY_REASON, data->reason);
                     esp_diag_variable_add_int(KEY_DISC_CNT, s_priv_data.disconn_cnt);
+#else
+                    esp_diag_variable_report_int(TAG_WIFI, KEY_REASON, data->reason);
+                    esp_diag_variable_report_int(TAG_WIFI, KEY_DISC_CNT, s_priv_data.disconn_cnt);
+#endif
                 }
                 break;
             }
             case WIFI_EVENT_STA_AUTHMODE_CHANGE:
             {
                 wifi_event_sta_authmode_change_t *data = evt_data;
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
                 esp_diag_variable_add_uint(KEY_AUTHMODE, data->new_mode);
+#else
+                esp_diag_variable_report_uint(TAG_WIFI, KEY_AUTHMODE, data->new_mode);
+#endif
                 s_priv_data.prev_sta_data.authmode = data->new_mode;
                 break;
             }
@@ -157,9 +198,15 @@ static void evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, vo
             case IP_EVENT_STA_GOT_IP:
             {
                 ip_event_got_ip_t *data = evt_data;
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
                 esp_diag_variable_add_ipv4(KEY_IPv4, data->ip_info.ip.addr);
                 esp_diag_variable_add_ipv4(KEY_NETMASK, data->ip_info.netmask.addr);
                 esp_diag_variable_add_ipv4(KEY_GATEWAY, data->ip_info.gw.addr);
+#else
+                esp_diag_variable_report_ipv4(TAG_IP, KEY_IPv4, data->ip_info.ip.addr);
+                esp_diag_variable_report_ipv4(TAG_IP, KEY_NETMASK, data->ip_info.netmask.addr);
+                esp_diag_variable_report_ipv4(TAG_IP, KEY_GATEWAY, data->ip_info.gw.addr);
+#endif
 #if CONFIG_DIAG_MORE_NETWORK_VARS
                 diag_add_more_wifi_vars();
 #endif
@@ -168,7 +215,11 @@ static void evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, vo
             case IP_EVENT_STA_LOST_IP:
             {
                 uint32_t ip = 0x0;
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
                 esp_diag_variable_add_ipv4(KEY_IPv4, ip);
+#else
+                esp_diag_variable_report_ipv4(TAG_IP, KEY_IPv4, ip);
+#endif
                 break;
             }
             default:
@@ -216,22 +267,38 @@ esp_err_t esp_diag_network_variables_init(void)
         s_priv_data.prev_sta_data.channel = ap_info.primary;
         s_priv_data.prev_sta_data.authmode = ap_info.authmode;
         s_priv_data.wifi_connected = true;
-
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
         esp_diag_variable_add_str(KEY_SSID, (char *)ap_info.ssid);
         esp_diag_variable_add_mac(KEY_BSSID, ap_info.bssid);
         esp_diag_variable_add_int(KEY_CHANNEL, ap_info.primary);
         esp_diag_variable_add_uint(KEY_AUTHMODE, ap_info.authmode);
+#else
+        esp_diag_variable_report_str(TAG_WIFI, KEY_SSID, (char *)ap_info.ssid);
+        esp_diag_variable_report_mac(TAG_WIFI, KEY_BSSID, ap_info.bssid);
+        esp_diag_variable_report_int(TAG_WIFI, KEY_CHANNEL, ap_info.primary);
+        esp_diag_variable_report_uint(TAG_WIFI, KEY_AUTHMODE, ap_info.authmode);
+#endif
     }
 
     memset(&ip_info, 0, sizeof(ip_info));
     /* If wifi interface is up and running then record the details */
     if (esp_netif_is_netif_up(esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"))
         && esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"), &ip_info) == ESP_OK) {
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
         esp_diag_variable_add_ipv4(KEY_IPv4, ip_info.ip.addr);
         esp_diag_variable_add_ipv4(KEY_NETMASK, ip_info.netmask.addr);
         esp_diag_variable_add_ipv4(KEY_GATEWAY, ip_info.gw.addr);
+#else
+        esp_diag_variable_report_ipv4(TAG_IP, KEY_IPv4, ip_info.ip.addr);
+        esp_diag_variable_report_ipv4(TAG_IP, KEY_NETMASK, ip_info.netmask.addr);
+        esp_diag_variable_report_ipv4(TAG_IP, KEY_GATEWAY, ip_info.gw.addr);
+#endif
     }
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
     esp_diag_variable_add_int(KEY_DISC_CNT, s_priv_data.disconn_cnt);
+#else
+    esp_diag_variable_report_int(TAG_WIFI, KEY_DISC_CNT, s_priv_data.disconn_cnt);
+#endif
     s_priv_data.init = true;
     return ESP_OK;
 }
@@ -243,6 +310,8 @@ esp_err_t esp_diag_network_variables_deinit(void)
     }
     esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, evt_handler);
     esp_event_handler_unregister(IP_EVENT, ESP_EVENT_ANY_ID, evt_handler);
+
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
     esp_diag_variable_unregister(KEY_SSID);
     esp_diag_variable_unregister(KEY_BSSID);
     esp_diag_variable_unregister(KEY_CHANNEL);
@@ -259,6 +328,25 @@ esp_err_t esp_diag_network_variables_deinit(void)
     esp_diag_variable_unregister(KEY_SECOND_CH);
     esp_diag_variable_unregister(KEY_PROTOCOL_AP);
     esp_diag_variable_unregister(KEY_BANDWIDTH_AP);
+#endif
+#else
+    esp_diag_variable_unregister(TAG_WIFI, KEY_SSID);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_BSSID);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_CHANNEL);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_AUTHMODE);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_REASON);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_DISC_CNT);
+    esp_diag_variable_unregister(TAG_IP, KEY_IPv4);
+    esp_diag_variable_unregister(TAG_IP, KEY_NETMASK);
+    esp_diag_variable_unregister(TAG_IP, KEY_GATEWAY);
+#if CONFIG_DIAG_MORE_NETWORK_VARS
+    esp_diag_variable_unregister(TAG_WIFI, KEY_PROTOCOL);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_BANDWIDTH);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_POWER_SAVE);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_SECOND_CH);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_PROTOCOL_AP);
+    esp_diag_variable_unregister(TAG_WIFI, KEY_BANDWIDTH_AP);
+#endif
 #endif
     memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;

@@ -21,6 +21,10 @@
 #include <soc/soc_memory_layout.h>
 #include "esp_insights_cbor_encoder.h"
 
+#define TAG "cbor_encoder"
+
+#define METRICS_PATH_VALUE      "M"
+#define VARIABLES_PATH_VALUE    "P"
 
 static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map;
 static CborEncoder s_meta_encoder, s_meta_result_map, s_diag_meta_map, s_diag_meta_data_map;
@@ -483,7 +487,18 @@ static void encode_str_data_pt(CborEncoder *array, const uint8_t *data)
     // copy at aligned address to avoid potential alignment issue
     memcpy(m_data, data, sizeof(esp_diag_str_data_pt_t));
     cbor_encode_text_stringz(&map, "n");
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    char temp_path_key[10] = {0};
+    snprintf(temp_path_key, sizeof(temp_path_key), "%s", ((m_data->type & 0xffff)==ESP_DIAG_DATA_PT_METRICS)?METRICS_PATH_VALUE:VARIABLES_PATH_VALUE);
+    CborEncoder key_arr;
+    cbor_encoder_create_array(&map, &key_arr, CborIndefiniteLength);
+    cbor_encode_text_stringz(&key_arr, temp_path_key);
+    cbor_encode_text_stringz(&key_arr, m_data->tag);
+    cbor_encode_text_stringz(&key_arr, m_data->key);
+    cbor_encoder_close_container(&map, &key_arr);
+#else
     cbor_encode_text_stringz(&map, m_data->key);
+#endif
     cbor_encode_text_stringz(&map, "v");
     cbor_encode_text_stringz(&map, m_data->value.str);
     cbor_encode_text_stringz(&map, "t");
@@ -499,9 +514,19 @@ static void encode_data_pt(CborEncoder *array, const uint8_t *data)
     esp_diag_data_pt_t *m_data = &enc_scratch_buf.data_pt;
     // copy at aligned address to avoid potential alignment issue
     memcpy(m_data, data, sizeof(esp_diag_data_pt_t));
-
     cbor_encode_text_stringz(&map, "n");
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    char temp_path_key[10] = {0};
+    snprintf(temp_path_key, sizeof(temp_path_key), "%s", ((m_data->type & 0xffff)==ESP_DIAG_DATA_PT_METRICS)?METRICS_PATH_VALUE:VARIABLES_PATH_VALUE);
+    CborEncoder key_arr;
+    cbor_encoder_create_array(&map, &key_arr, CborIndefiniteLength);
+    cbor_encode_text_stringz(&key_arr, temp_path_key);
+    cbor_encode_text_stringz(&key_arr, m_data->tag);
+    cbor_encode_text_stringz(&key_arr, m_data->key);
+    cbor_encoder_close_container(&map, &key_arr);
+#else
     cbor_encode_text_stringz(&map, m_data->key);
+#endif
     cbor_encode_text_stringz(&map, "v");
     switch (m_data->data_type) {
         case ESP_DIAG_DATA_TYPE_BOOL:
@@ -576,11 +601,10 @@ static size_t encode_data_points(const uint8_t *data, size_t size, const char *k
             break;
         }
 
-        if (!header.dg || !esp_ptr_in_drom(header.dg) || !header.len) {
+        if (!header.len) {
 #if INSIGHTS_DEBUG_ENABLED
             // invalid record
-            printf("%s: invalid record, header.dg %p, ptr_in_drom %d, header.len %d\n",
-                   "insights_cbor_enocoder", header.dg, esp_ptr_in_drom(header.dg), header.len);
+            printf("%s: invalid record, header.len %d\n", "insights_cbor_enocoder", header.len);
 
             ESP_LOG_BUFFER_HEX_LEVEL("cbor_enc", data, size, ESP_LOG_INFO);
 #endif
@@ -661,15 +685,33 @@ void esp_insights_cbor_encode_meta_data_end(void)
 static void encode_metrics_meta_element(CborEncoder *map, const esp_diag_metrics_meta_t *metrics)
 {
     CborEncoder id_map;
+#ifdef NEW_META_STRUCT
+    CborEncoder m_map;
+#endif
     cbor_encode_text_stringz(map, metrics->key);
+#ifdef NEW_META_STRUCT
+    cbor_encoder_create_map(map, &m_map, CborIndefiniteLength);
+    cbor_encode_text_stringz(&m_map, "m"); // a metrics meta entry
+    cbor_encoder_create_map(&m_map, &id_map, CborIndefiniteLength);
+#else
     cbor_encoder_create_map(map, &id_map, CborIndefiniteLength);
+#endif
+#ifndef TAG_IS_OUTER_KEY
+    cbor_encode_text_stringz(&id_map, "tag");
+    cbor_encode_text_stringz(&id_map, metrics->tag);
+#endif
     cbor_encode_text_stringz(&id_map, "label");
     cbor_encode_text_stringz(&id_map, metrics->label);
     cbor_encode_text_stringz(&id_map, "path");
     cbor_encode_text_stringz(&id_map, metrics->path);
     cbor_encode_text_stringz(&id_map, "data_type");
     cbor_encode_uint(&id_map, metrics->type);
+#ifdef NEW_META_STRUCT
+    cbor_encoder_close_container(&m_map, &id_map); // close metrics
+    cbor_encoder_close_container(map, &m_map);
+#else
     cbor_encoder_close_container(map, &id_map);
+#endif
 }
 
 void esp_insights_cbor_encode_meta_metrics(const esp_diag_metrics_meta_t *metrics, uint32_t metrics_len)
@@ -677,14 +719,73 @@ void esp_insights_cbor_encode_meta_metrics(const esp_diag_metrics_meta_t *metric
     if (!metrics || !metrics_len) {
         return;
     }
-    uint32_t i;
     CborEncoder map;
+#ifdef NEW_META_STRUCT
+    CborEncoder metrics_map;
+    cbor_encode_text_stringz(&s_diag_meta_data_map, METRICS_PATH_VALUE);
+    cbor_encoder_create_map(&s_diag_meta_data_map, &metrics_map, CborIndefiniteLength);
+    // d: decendants map
+    cbor_encode_text_stringz(&metrics_map, "d");
+    cbor_encoder_create_map(&metrics_map, &map, CborIndefiniteLength);
+    // d: descendants map
+    // enabled config for data
+#else
     cbor_encode_text_stringz(&s_diag_meta_data_map, "metrics");
     cbor_encoder_create_map(&s_diag_meta_data_map, &map, CborIndefiniteLength);
-    for (i = 0; i < metrics_len; i++) {
+#endif
+#ifndef TAG_IS_OUTER_KEY
+    for (int i = 0; i < metrics_len; i++) {
         encode_metrics_meta_element(&map, (metrics + i));
     }
+#else
+    for (int i = 0; i < metrics_len; i++) {
+        const esp_diag_metrics_meta_t *metrics_i = metrics + i;
+        // check if this group was already encoded
+        bool encoded = false;
+        for (int j = 0; j < i; j++) {
+            const esp_diag_metrics_meta_t *metrics_j = metrics + j;
+            // ESP_LOGI(TAG, "Comparing tags %s %s", metrics_i->tag, metrics_j->tag);
+            if (metrics_j->tag == metrics_i->tag) {
+                encoded = true;
+                break;
+            }
+        }
+        if (encoded == false) {
+            // encode all the metrices with the group
+            ESP_LOGD(TAG, "Encoding new tag %s", metrics_i->tag);
+            CborEncoder tag_map;
+            cbor_encode_text_stringz(&map, metrics_i->tag);
+#ifdef NEW_META_STRUCT
+            CborEncoder tag_d_map;
+            cbor_encoder_create_map(&map, &tag_d_map, CborIndefiniteLength);
+            cbor_encode_text_stringz(&tag_d_map, "d");
+            cbor_encoder_create_map(&tag_d_map, &tag_map, CborIndefiniteLength);
+#else
+            cbor_encoder_create_map(&map, &tag_map, CborIndefiniteLength);
+#endif
+            for (int j = i; j < metrics_len; j++) {
+                const esp_diag_metrics_meta_t *metrics_j = metrics + j;
+                if (metrics_j->tag == metrics_i->tag) {
+                    ESP_LOGD(TAG, "Encoding key %s", metrics_j->key);
+                    encode_metrics_meta_element(&tag_map, metrics_j);
+                }
+            }
+#ifdef NEW_META_STRUCT
+            cbor_encoder_close_container(&tag_d_map, &tag_map);
+            cbor_encoder_close_container(&map, &tag_d_map);
+#else
+            cbor_encoder_close_container(&map, &tag_map);
+#endif
+        }
+    }
+#endif
+#ifdef NEW_META_STRUCT
+    // close d: decendants
+    cbor_encoder_close_container(&metrics_map, &map);
+    cbor_encoder_close_container(&s_diag_meta_data_map, &metrics_map);
+#else
     cbor_encoder_close_container(&s_diag_meta_data_map, &map);
+#endif
 }
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
 
@@ -692,15 +793,33 @@ void esp_insights_cbor_encode_meta_metrics(const esp_diag_metrics_meta_t *metric
 static void encode_variable_meta_element(CborEncoder *map, const esp_diag_variable_meta_t *variable)
 {
     CborEncoder id_map;
+#ifdef NEW_META_STRUCT
+    CborEncoder m_map;
+#endif
     cbor_encode_text_stringz(map, variable->key);
+#ifdef NEW_META_STRUCT
+    cbor_encoder_create_map(map, &m_map, CborIndefiniteLength);
+    cbor_encode_text_stringz(&m_map, "p"); // a variable meta entry
+    cbor_encoder_create_map(&m_map, &id_map, CborIndefiniteLength);
+#else
     cbor_encoder_create_map(map, &id_map, CborIndefiniteLength);
+#endif
+#ifndef TAG_IS_OUTER_KEY
+    cbor_encode_text_stringz(&id_map, "tag");
+    cbor_encode_text_stringz(&id_map, variable->tag);
+#endif
     cbor_encode_text_stringz(&id_map, "label");
     cbor_encode_text_stringz(&id_map, variable->label);
     cbor_encode_text_stringz(&id_map, "path");
     cbor_encode_text_stringz(&id_map, variable->path);
     cbor_encode_text_stringz(&id_map, "data_type");
     cbor_encode_uint(&id_map, variable->type);
+#ifdef NEW_META_STRUCT
+    cbor_encoder_close_container(&m_map, &id_map); // close variable entry
+    cbor_encoder_close_container(map, &m_map);
+#else
     cbor_encoder_close_container(map, &id_map);
+#endif
 }
 
 void esp_insights_cbor_encode_meta_variables(const esp_diag_variable_meta_t *variables, uint32_t variables_len)
@@ -708,13 +827,68 @@ void esp_insights_cbor_encode_meta_variables(const esp_diag_variable_meta_t *var
     if (!variables || !variables_len) {
         return;
     }
-    uint32_t j;
+
     CborEncoder map;
+#ifdef NEW_META_STRUCT
+    CborEncoder variables_map;
+    cbor_encode_text_stringz(&s_diag_meta_data_map, VARIABLES_PATH_VALUE);
+    cbor_encoder_create_map(&s_diag_meta_data_map, &variables_map, CborIndefiniteLength);
+    // d: decendants map
+    cbor_encode_text_stringz(&variables_map, "d");
+    cbor_encoder_create_map(&variables_map, &map, CborIndefiniteLength);
+#else
     cbor_encode_text_stringz(&s_diag_meta_data_map, "params");
     cbor_encoder_create_map(&s_diag_meta_data_map, &map, CborIndefiniteLength);
-    for (j = 0; j < variables_len; j++) {
-        encode_variable_meta_element(&map, (variables + j));
+#endif
+#ifndef TAG_IS_OUTER_KEY
+    for (int i = 0; i < variables_len; i++) {
+        encode_variable_meta_element(&map, (variables + i));
     }
+#else
+    for (int i = 0; i < variables_len; i++) {
+        const esp_diag_variable_meta_t *variables_i = variables + i;
+        // check if this group was already encoded
+        bool encoded = false;
+        for (int j = 0; j < i; j++) {
+            const esp_diag_variable_meta_t *variables_j = variables + j;
+            if (variables_j->tag == variables_i->tag) {
+                encoded = true;
+                break;
+            }
+        }
+        if (encoded == false) {
+            CborEncoder tag_map;
+            // encode all the metrices with the group
+            cbor_encode_text_stringz(&map, variables_i->tag);
+#ifdef NEW_META_STRUCT
+            CborEncoder tag_d_map;
+            cbor_encoder_create_map(&map, &tag_d_map, CborIndefiniteLength);
+            cbor_encode_text_stringz(&tag_d_map, "d");
+            cbor_encoder_create_map(&tag_d_map, &tag_map, CborIndefiniteLength);
+#else
+            cbor_encoder_create_map(&map, &tag_map, CborIndefiniteLength);
+#endif
+            for (int j = i; j < variables_len; j++) {
+                const esp_diag_variable_meta_t *variables_j = variables + j;
+                if (variables_j->tag == variables_i->tag) {
+                    encode_variable_meta_element(&tag_map, variables_j);
+                }
+            }
+#ifdef NEW_META_STRUCT
+            cbor_encoder_close_container(&tag_d_map, &tag_map);
+            cbor_encoder_close_container(&map, &tag_d_map);
+#else
+            cbor_encoder_close_container(&map, &tag_map);
+#endif
+        }
+    }
+#endif
+#ifdef NEW_META_STRUCT
+    // close d: decendants
+    cbor_encoder_close_container(&variables_map, &map);
+    cbor_encoder_close_container(&s_diag_meta_data_map, &variables_map);
+#else
     cbor_encoder_close_container(&s_diag_meta_data_map, &map);
+#endif
 }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */

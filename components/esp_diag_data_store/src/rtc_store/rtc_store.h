@@ -44,7 +44,6 @@ rtc_store_meta_header_t *rtc_store_get_meta_record_current();
  * @brief Non critical data header
  */
 typedef struct {
-    const char *dg;     /*!< Data group of non critical data eg: heap, wifi, ip */
     uint32_t len;       /*!< Length of data */
 } rtc_store_non_critical_data_hdr_t;
 

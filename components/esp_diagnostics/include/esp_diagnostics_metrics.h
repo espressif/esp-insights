@@ -79,15 +79,6 @@ esp_err_t esp_diag_metrics_register(const char *tag,
                                     esp_diag_data_type_t type);
 
 /**
- * @brief Unregister a diagnostics metrics
- *
- * @param[in] key Key for the metrics
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
- */
-esp_err_t esp_diag_metrics_unregister(const char *key);
-
-/**
  * @brief Unregister all previously registered metrics
  *
  * @return ESP_OK if successful, qppropriate error code otherwise.
@@ -108,10 +99,23 @@ const esp_diag_metrics_meta_t *esp_diag_metrics_meta_get_all(uint32_t *len);
  */
 void esp_diag_metrics_meta_print_all(void);
 
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+
+/**
+ * @brief Unregister a diagnostics metrics
+ *
+ * @param[in] tag Tag of the metrics
+ * @param[in] key Key for the metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_unregister(const char *tag, const char *key);
+
 /**
  * @brief Add metrics to storage
  *
  * @param[in] data_type Data type of metrics \ref esp_diag_data_type_t
+ * @param[in] tag       Tag of metrics
  * @param[in] key       Key of metrics
  * @param[in] val       Value of metrics
  * @param[in] val_sz    Size of val
@@ -121,79 +125,154 @@ void esp_diag_metrics_meta_print_all(void);
  *
  * @note \ref esp_diag_timestamp_get() API can be used to get timestamp in mircoseconds.
  */
-esp_err_t esp_diag_metrics_add(esp_diag_data_type_t data_type,
-                               const char *key, const void *val,
-                               size_t val_sz, uint64_t ts);
+esp_err_t esp_diag_metrics_report(esp_diag_data_type_t data_type,
+                                  const char *tag, const char *key, const void *val,
+                                  size_t val_sz, uint64_t ts);
 
 /**
  * @brief Add the metrics of data type boolean
  *
+ * @param[in] tag Tag of metrics
  * @param[in] key Key of the metrics
  * @param[in] b   Value of the metrics
  *
  * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_bool(const char *tag, const char *key, bool b);
+
+/**
+ * @brief Add the metrics of data type integer
+ *
+ * @param[in] tag Tag of metrics
+ * @param[in] key Key of the metrics
+ * @param[in] i   Value of the metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_int(const char *tag, const char *key, int32_t i);
+
+/**
+ * @brief Add the metrics of data type unsigned integer
+ *
+ * @param[in] tag Tag of metrics
+ * @param[in] key Key of the metrics
+ * @param[in] u   Value of the metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_uint(const char *tag, const char *key, uint32_t u);
+
+/**
+ * @brief Add the metrics of data type float
+ *
+ * @param[in] tag Tag of metrics
+ * @param[in] key Key of the metrics
+ * @param[in] f   Value of the metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_float(const char *tag, const char *key, float f);
+
+/**
+ * @brief Add the IPv4 address metrics
+ *
+ * @param[in] tag Tag of metrics
+ * @param[in] key Key of the metrics
+ * @param[in] ip  IPv4 address
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_ipv4(const char *tag, const char *key, uint32_t ip);
+
+/**
+ * @brief Add the MAC address metrics
+ *
+ * @param[in] tag Tag of metrics
+ * @param[in] key Key of the metrics
+ * @param[in] mac Array of length 6 i.e 6 octets of mac address
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_mac(const char *tag, const char *key, uint8_t *mac);
+
+/**
+ * @brief Add the metrics of data type string
+ *
+ * @param[in] tag Tag of metrics
+ * @param[in] key Key of the metrics
+ * @param[in] str Value of the metrics
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_metrics_report_str(const char *tag, const char *key, const char *str);
+
+#else /** APIs for older version of metadata for compatibility */
+
+/**
+ * @brief Unregister a diagnostics metrics
+ *
+ * Legacy version of metrics_unregister without `tag` parameter
+ */
+esp_err_t esp_diag_metrics_unregister(const char *key);
+
+/**
+ * @brief Add the metrics of data type `data_type`
+ *
+ * @note Same as \ref esp_diag_metrics_report but with legacy format
+ */
+esp_err_t esp_diag_metrics_add(esp_diag_data_type_t data_type, const char *key,
+                               const void *val, size_t val_sz, uint64_t ts);
+
+/**
+ * @brief Add the metrics of data type bool
+ *
+ * @note Same as \ref esp_diag_metrics_report_bool but with legacy format
  */
 esp_err_t esp_diag_metrics_add_bool(const char *key, bool b);
 
 /**
  * @brief Add the metrics of data type integer
  *
- * @param[in] key Key of the metrics
- * @param[in] i   Value of the metrics
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
+ * @note Same as \ref esp_diag_metrics_report_int but with legacy format
  */
 esp_err_t esp_diag_metrics_add_int(const char *key, int32_t i);
 
 /**
  * @brief Add the metrics of data type unsigned integer
  *
- * @param[in] key Key of the metrics
- * @param[in] u   Value of the metrics
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
+ * @note Same as \ref esp_diag_metrics_report_uint but with legacy format
  */
 esp_err_t esp_diag_metrics_add_uint(const char *key, uint32_t u);
 
 /**
  * @brief Add the metrics of data type float
  *
- * @param[in] key Key of the metrics
- * @param[in] f   Value of the metrics
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
+ * @note Same as \ref esp_diag_metrics_report_float but with legacy format
  */
 esp_err_t esp_diag_metrics_add_float(const char *key, float f);
 
 /**
  * @brief Add the IPv4 address metrics
  *
- * @param[in] key Key of the metrics
- * @param[in] ip  IPv4 address
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
+ * @note Same as \ref esp_diag_metrics_report_ipv4 but with legacy format
  */
 esp_err_t esp_diag_metrics_add_ipv4(const char *key, uint32_t ip);
 
 /**
  * @brief Add the MAC address metrics
  *
- * @param[in] key Key of the metrics
- * @param[in] mac Array of length 6 i.e 6 octets of mac address
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
+ * @note Same as \ref esp_diag_metrics_report_mac but with legacy format
  */
 esp_err_t esp_diag_metrics_add_mac(const char *key, uint8_t *mac);
 
 /**
  * @brief Add the metrics of data type string
  *
- * @param[in] key Key of the metrics
- * @param[in] str Value of the metrics
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
+ * @note Same as \ref esp_diag_metrics_report_str but with legacy format
  */
 esp_err_t esp_diag_metrics_add_str(const char *key, const char *str);
+
+#endif
 
 #endif /* CONFIG_DIAG_ENABLE_METRICS */
 

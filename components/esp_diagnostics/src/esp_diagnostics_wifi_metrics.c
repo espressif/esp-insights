@@ -42,7 +42,11 @@ static void update_min_rssi(int32_t rssi)
 {
     if (rssi < s_priv_data.min_rssi) {
         s_priv_data.min_rssi = rssi;
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+        esp_diag_metrics_report_int(METRICS_TAG, KEY_MIN_RSSI, rssi);
+#else
         esp_diag_metrics_add_int(KEY_MIN_RSSI, rssi);
+#endif
         ESP_LOGI(LOG_TAG, "Wi-Fi RSSI crossed threshold %" PRIi32, rssi);
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
         esp_wifi_set_rssi_threshold(rssi);
@@ -65,9 +69,16 @@ static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_i
         {
             s_priv_data.wifi_connected = true;
             s_priv_data.status_sent = false;
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+            if (esp_diag_metrics_report_bool(METRICS_TAG, KEY_STATUS, 1) == ESP_OK) {
+                s_priv_data.status_sent = true;
+            }
+#else
             if (esp_diag_metrics_add_bool(KEY_STATUS, 1) == ESP_OK) {
                 s_priv_data.status_sent = true;
             }
+#endif
+
             break;
         }
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -75,9 +86,15 @@ static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_i
             if (s_priv_data.wifi_connected) {
                 s_priv_data.wifi_connected = false;
                 s_priv_data.status_sent = false;
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+                if (esp_diag_metrics_report_bool(METRICS_TAG, KEY_STATUS, 0) == ESP_OK) {
+                    s_priv_data.status_sent = true;
+                }
+#else
                 if (esp_diag_metrics_add_bool(KEY_STATUS, 0) == ESP_OK) {
                     s_priv_data.status_sent = true;
                 }
+#endif
             }
             break;
         }
@@ -105,18 +122,31 @@ esp_err_t esp_diag_wifi_metrics_dump(void)
     int32_t rssi = get_rssi();
     if (rssi != 1) {
         update_min_rssi(rssi);
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+        RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_int(METRICS_TAG, KEY_RSSI, rssi), ESP_LOG_WARN, LOG_TAG,
+                            "Failed to add Wi-Fi metrics key:" KEY_RSSI);
+        RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_int(METRICS_TAG, KEY_MIN_RSSI, s_priv_data.min_rssi), ESP_LOG_WARN, LOG_TAG,
+                            "Failed to add Wi-Fi metrics key:" KEY_MIN_RSSI);
+#else
         RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_int(KEY_RSSI, rssi), ESP_LOG_WARN, LOG_TAG,
                             "Failed to add Wi-Fi metrics key:" KEY_RSSI);
         RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_int(KEY_MIN_RSSI, s_priv_data.min_rssi), ESP_LOG_WARN, LOG_TAG,
                             "Failed to add Wi-Fi metrics key:" KEY_MIN_RSSI);
+#endif
         s_priv_data.prev_rssi = rssi;
         ESP_LOGI(LOG_TAG, "%s:%" PRIi32 " %s:%" PRIi32, KEY_RSSI, rssi, KEY_MIN_RSSI, s_priv_data.min_rssi);
     }
     if (!s_priv_data.status_sent) {
         // if for some reason we were not able to add the status, try again
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+        if (esp_diag_metrics_report_bool(METRICS_TAG, KEY_STATUS, s_priv_data.wifi_connected) == ESP_OK) {
+            s_priv_data.status_sent = true;
+        }
+#else
         if (esp_diag_metrics_add_bool(KEY_STATUS, s_priv_data.wifi_connected) == ESP_OK) {
             s_priv_data.status_sent = true;
         }
+#endif
     }
     return ESP_OK;
 }
@@ -173,9 +203,15 @@ esp_err_t esp_diag_wifi_metrics_deinit(void)
     if (xTimerDelete(s_priv_data.handle, 10) == pdFALSE) {
         ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
     }
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
     esp_diag_metrics_unregister(KEY_RSSI);
     esp_diag_metrics_unregister(KEY_MIN_RSSI);
     esp_diag_metrics_unregister(KEY_STATUS);
+#else
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_RSSI);
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_MIN_RSSI);
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_STATUS);
+#endif
     memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }

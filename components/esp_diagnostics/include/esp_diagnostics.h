@@ -159,7 +159,10 @@ typedef struct {
 typedef struct {
     uint16_t type;       /*!< Metrics or Variable */
     uint16_t data_type;  /*!< Data type */
-    char key[16];        /*!< Key */
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    char tag[16];           /*!< TAG */
+#endif
+    char key[16];           /*!< Key */
     uint64_t ts;         /*!< Timestamp */
     union {
         bool b;          /*!< Value for boolean data type */
@@ -177,6 +180,9 @@ typedef struct {
 typedef struct {
     uint16_t type;       /*!< Metrics or Variable */
     uint16_t data_type;  /*!< Data type */
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    char tag[16];        /*!< TAG */
+#endif
     char key[16];        /*!< Key */
     uint64_t ts;         /*!< Timestamp */
     union {
