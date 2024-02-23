@@ -37,7 +37,7 @@
  *    which may get stuck in recursive mutex etc. Please be careful if you are using logs...
  */
 
-#if CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
+#if CONFIG_DIAG_DATA_STORE_DBG_PRINTS
 #define RTC_STORE_DBG_PRINTS 1
 #endif
 
