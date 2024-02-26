@@ -48,7 +48,30 @@ esp_err_t esp_diag_heap_metrics_dump(void)
     uint32_t free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     uint32_t lfb = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
     uint32_t min_free_ever = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_uint(METRICS_TAG, KEY_FREE, free), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_FREE);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_uint(METRICS_TAG, KEY_LFB, lfb), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_LFB);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_uint(METRICS_TAG, KEY_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_MIN_FREE);
 
+    ESP_LOGI(LOG_TAG, KEY_FREE ":0x%" PRIx32 " " KEY_LFB ":0x%" PRIx32 " " KEY_MIN_FREE ":0x%" PRIx32, free, lfb, min_free_ever);
+#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
+    free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    lfb = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+    min_free_ever = heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM);
+
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_uint(METRICS_TAG, KEY_EXT_FREE, free), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_EXT_FREE);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_uint(METRICS_TAG, KEY_EXT_LFB, lfb), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_EXT_LFB);
+    RET_ON_ERR_WITH_LOG(esp_diag_metrics_report_uint(METRICS_TAG, KEY_EXT_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
+                        "Failed to add heap metric key:" KEY_EXT_MIN_FREE);
+
+    ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%" PRIx32 " " KEY_EXT_LFB ":0x%" PRIx32 " " KEY_EXT_MIN_FREE ":0x%" PRIx32, free, lfb, min_free_ever);
+#endif /* CONFIG_ESP32_SPIRAM_SUPPORT */
+#else
     RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_FREE, free), ESP_LOG_WARN, LOG_TAG,
                         "Failed to add heap metric key:" KEY_FREE);
     RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_LFB, lfb), ESP_LOG_WARN, LOG_TAG,
@@ -56,7 +79,7 @@ esp_err_t esp_diag_heap_metrics_dump(void)
     RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
                         "Failed to add heap metric key:" KEY_MIN_FREE);
 
-    ESP_LOGI(LOG_TAG, KEY_FREE ":0x%" PRIx32 " " KEY_LFB ":0x%" PRIx32 " " KEY_MIN_FREE ":0x%" PRIx32, free, lfb, min_free_ever);
+    ESP_LOGI(LOG_TAG, KEY_FREE ":0x%"PRIx32" " KEY_LFB ":0x%"PRIx32" " KEY_MIN_FREE ":0x%"PRIx32, free, lfb, min_free_ever);
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
     free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     lfb = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
@@ -69,8 +92,9 @@ esp_err_t esp_diag_heap_metrics_dump(void)
     RET_ON_ERR_WITH_LOG(esp_diag_metrics_add_uint(KEY_EXT_MIN_FREE, min_free_ever), ESP_LOG_WARN, LOG_TAG,
                         "Failed to add heap metric key:" KEY_EXT_MIN_FREE);
 
-    ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%" PRIx32 " " KEY_EXT_LFB ":0x%" PRIx32 " " KEY_EXT_MIN_FREE ":0x%" PRIx32, free, lfb, min_free_ever);
+    ESP_LOGI(LOG_TAG, KEY_EXT_FREE ":0x%"PRIx32" " KEY_EXT_LFB ":0x%"PRIx32" " KEY_EXT_MIN_FREE ":0x%"PRIx32, free, lfb, min_free_ever);
 #endif /* CONFIG_ESP32_SPIRAM_SUPPORT */
+#endif
     return ESP_OK;
 }
 
@@ -88,7 +112,12 @@ static void heap_timer_cb(TimerHandle_t handle)
 static void alloc_failed_hook(size_t size, uint32_t caps, const char *func)
 {
     esp_diag_heap_metrics_dump();
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_metrics_report_uint(METRICS_TAG, KEY_ALLOC_FAIL, size);
+#else
     esp_diag_metrics_add_uint(KEY_ALLOC_FAIL, size);
+#endif
+
     ESP_DIAG_EVENT(METRICS_TAG, KEY_ALLOC_FAIL " size:0x%x func:%s", size, func);
 }
 #endif
@@ -139,6 +168,7 @@ esp_err_t esp_diag_heap_metrics_deinit(void)
     if (xTimerDelete(s_priv_data.handle, 10) == pdFALSE) {
         ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
     }
+#ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
     esp_diag_metrics_unregister(KEY_ALLOC_FAIL);
 #endif
@@ -150,6 +180,19 @@ esp_err_t esp_diag_heap_metrics_deinit(void)
     esp_diag_metrics_unregister(KEY_FREE);
     esp_diag_metrics_unregister(KEY_LFB);
     esp_diag_metrics_unregister(KEY_MIN_FREE);
+#else
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_ALLOC_FAIL);
+#endif
+#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_EXT_FREE);
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_EXT_LFB);
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_EXT_MIN_FREE);
+#endif
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_FREE);
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_LFB);
+    esp_diag_metrics_unregister(METRICS_TAG, KEY_MIN_FREE);
+#endif
     memset(&s_priv_data, 0, sizeof(s_priv_data));
     return ESP_OK;
 }

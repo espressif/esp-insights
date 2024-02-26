@@ -18,6 +18,12 @@ menu "Diagnostics data store"
                 Just a placeholder. This data store type is not supported as of now
     endchoice
 
+    config DIAG_DATA_STORE_DBG_PRINTS
+        bool "Enable data store debug prints"
+        default false
+        help
+            Enables debug prints for diagnostics data store
+
     config DIAG_DATA_STORE_REPORTING_WATERMARK_PERCENT
         int "Reporting watermark percentage"
         range 50 90

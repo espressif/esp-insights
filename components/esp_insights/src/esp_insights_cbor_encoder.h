@@ -14,6 +14,12 @@
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
 #include <rtc_store.h>
 
+// make tag/group as a outer key and actual keys from it are contained within
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+#define TAG_IS_OUTER_KEY 1
+#define NEW_META_STRUCT 1
+#endif
+
 void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version);
 void esp_insights_cbor_encode_diag_data_begin(void);
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info);

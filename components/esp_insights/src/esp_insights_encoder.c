@@ -11,13 +11,22 @@
 
 #include "esp_insights_cbor_encoder.h"
 
+#if CONFIG_ESP_INSIGHTS_META_VERSION_10
 #define INSIGHTS_VERSION_MAJOR           "1"
+#else
+#define INSIGHTS_VERSION_MAJOR           "2"
+#endif
 #define INSIGHTS_VERSION_MINOR           "0"
 #define INSIGHTS_VERSION                 INSIGHTS_VERSION_MAJOR \
                                             "." INSIGHTS_VERSION_MINOR
 
+#if CONFIG_ESP_INSIGHTS_META_VERSION_10
 #define INSIGHTS_META_VERSION_MAJOR      "1"
+#else
+#define INSIGHTS_META_VERSION_MAJOR      "2"
+#endif
 #define INSIGHTS_META_VERSION_MINOR      "0"
+
 #define INSIGHTS_META_VERSION            INSIGHTS_META_VERSION_MAJOR \
                                             "." INSIGHTS_META_VERSION_MINOR
 
@@ -71,7 +80,7 @@ esp_err_t esp_insights_encode_data_begin(void *out_data, size_t out_data_size)
     if (!out_data || !out_data_size) {
         return ESP_ERR_INVALID_ARG;
     }
-    esp_insights_cbor_encode_diag_begin(out_data + TLV_OFFSET, out_data_size - TLV_OFFSET, INSIGHTS_META_VERSION);
+    esp_insights_cbor_encode_diag_begin(out_data + TLV_OFFSET, out_data_size - TLV_OFFSET, INSIGHTS_VERSION);
     esp_insights_cbor_encode_diag_data_begin();
     return ESP_OK;
 }

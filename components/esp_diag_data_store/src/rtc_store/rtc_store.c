@@ -37,7 +37,7 @@
  *    which may get stuck in recursive mutex etc. Please be careful if you are using logs...
  */
 
-#if CONFIG_ESP_INSIGHTS_DEBUG_ENABLED
+#if CONFIG_DIAG_DATA_STORE_DBG_PRINTS
 #define RTC_STORE_DBG_PRINTS 1
 #endif
 
@@ -316,7 +316,6 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     }
 #endif
     memset(&header, 0, sizeof(header));
-    header.dg = dg;
     header.len = len;
 
     // we have made sure of free size at this point, write index byte, data header and then actual data

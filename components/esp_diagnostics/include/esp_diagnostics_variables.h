@@ -81,15 +81,6 @@ esp_err_t esp_diag_variable_register(const char *tag,
                                      esp_diag_data_type_t type);
 
 /**
- * @brief Unregister a diagnostics variable
- *
- * @param[in] key Key for the variable
- *
- * @return ESP_OK if successful, appropriate error code otherwise.
- */
-esp_err_t esp_diag_variable_unregister(const char *key);
-
-/**
  * @brief Unregister all previously registered variables
  *
  * @return ESP_OK if successful, qppropriate error code otherwise.
@@ -110,10 +101,121 @@ const esp_diag_variable_meta_t *esp_diag_variable_meta_get_all(uint32_t *len);
  */
 void esp_diag_variable_meta_print_all(void);
 
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+
+/**
+ * @brief Unregister a diagnostics variable
+ *
+ * @param[in] tag Tag of variable
+ * @param[in] key Key for the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_unregister(const char *tag, const char *key);
+
 /**
  * @brief Add variable to storage
  *
  * @param[in] data_type Data type of variable \ref esp_diag_data_type_t
+ * @param[in] key       Key of variable
+ * @param[in] val       Value of variable
+ * @param[in] val_sz    Size of val
+ * @param[in] ts        Timestamp in microseconds, this should be the value at the time of data gathering
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ *
+ * @note \ref esp_diag_timestamp_get() API can be used to get timestamp in mircoseconds.
+ */
+esp_err_t esp_diag_variable_report(esp_diag_data_type_t data_type,
+                                   const char *tag, const char *key, const void *val,
+                                   size_t val_sz, uint64_t ts);
+
+/**
+ * @brief Add the variable of data type boolean
+ *
+ * @param[in] key Key of the variable
+ * @param[in] b   Value of the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_bool(const char *tag, const char *key, bool b);
+
+/**
+ * @brief Add the variable of data type integer
+ *
+ * @param[in] key Key of the variable
+ * @param[in] i   Value of the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_int(const char *tag, const char *key, int32_t i);
+
+/**
+ * @brief Add the variable of data type unsigned integer
+ *
+ * @param[in] key Key of the variable
+ * @param[in] u   Value of the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_uint(const char *tag, const char *key, uint32_t u);
+
+/**
+ * @brief Add the variable of data type float
+ *
+ * @param[in] key Key of the variable
+ * @param[in] f   Value of the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_float(const char *tag, const char *key, float f);
+
+/**
+ * @brief Add the IPv4 address variable
+ *
+ * @param[in] key Key of the variable
+ * @param[in] ip  IPv4 address
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_ipv4(const char *tag, const char *key, uint32_t ip);
+
+/**
+ * @brief Add the MAC address variable
+ *
+ * @param[in] key Key of the variable
+ * @param[in] mac Array of length 6 i.e 6 octets of mac address
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_mac(const char *tag, const char *key, uint8_t *mac);
+
+/**
+ * @brief Add the variable of data type string
+ *
+ * @param[in] key Key of the variable
+ * @param[in] str Value of the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_report_str(const char *tag, const char *key, const char *str);
+
+#else /** APIs for older version of metadata for compatibility */
+
+/**
+ * @brief Unregister a diagnostics variable
+ *
+ * @param[in] key Key for the variable
+ *
+ * @return ESP_OK if successful, appropriate error code otherwise.
+ */
+esp_err_t esp_diag_variable_unregister(const char *key);
+
+/**
+ * @brief Add variable to storage
+ *
+ * @param[in] data_type Data type of variable \ref esp_diag_data_type_t
+ * @param[in] tag       Tag of variable
  * @param[in] key       Key of variable
  * @param[in] val       Value of variable
  * @param[in] val_sz    Size of val
@@ -196,6 +298,8 @@ esp_err_t esp_diag_variable_add_mac(const char *key, uint8_t *mac);
  * @return ESP_OK if successful, appropriate error code otherwise.
  */
 esp_err_t esp_diag_variable_add_str(const char *key, const char *str);
+
+#endif
 
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 

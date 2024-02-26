@@ -63,4 +63,11 @@ menu "ESP Insights"
             There is a dynamic logic to decide the next timeout when the insights data will be reported.
             It depends on whether the data was sent or not during the previous timeout.
             If the data was sent, the next timeout is doubled and if not, it is halved.
+
+    config ESP_INSIGHTS_META_VERSION_10
+        bool "Use older metadata format (1.0)"
+        default y
+        help
+            For users already using older metadata, this provides an option to keep using the same.
+            This is important as the new metadata version (1.1), is not backwad compatible.
 endmenu
