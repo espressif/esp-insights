@@ -706,6 +706,10 @@ static void encode_metrics_meta_element(CborEncoder *map, const esp_diag_metrics
     cbor_encode_text_stringz(&id_map, metrics->path);
     cbor_encode_text_stringz(&id_map, "data_type");
     cbor_encode_uint(&id_map, metrics->type);
+    if (metrics->unit) {
+        cbor_encode_text_stringz(&id_map, "unit");
+        cbor_encode_text_stringz(&id_map, metrics->unit);
+    }
 #ifdef NEW_META_STRUCT
     cbor_encoder_close_container(&m_map, &id_map); // close metrics
     cbor_encoder_close_container(map, &m_map);
@@ -814,6 +818,10 @@ static void encode_variable_meta_element(CborEncoder *map, const esp_diag_variab
     cbor_encode_text_stringz(&id_map, variable->path);
     cbor_encode_text_stringz(&id_map, "data_type");
     cbor_encode_uint(&id_map, variable->type);
+    if (variable->unit) {
+        cbor_encode_text_stringz(&id_map, "unit");
+        cbor_encode_text_stringz(&id_map, variable->unit);
+    }
 #ifdef NEW_META_STRUCT
     cbor_encoder_close_container(&m_map, &id_map); // close variable entry
     cbor_encoder_close_container(map, &m_map);

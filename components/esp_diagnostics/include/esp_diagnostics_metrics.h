@@ -42,6 +42,7 @@ typedef struct {
     const char *label;         /*!< Label for the metrics */
     const char *path;          /*!< Hierarchical path for the key, must be separated by '.' for more than one level,
                                     eg: "wifi", "heap.internal", "heap.external" */
+    const char *unit;          /*!< Data unit, can be NULL */
     esp_diag_data_type_t type; /*!< Data type of metrics */
 } esp_diag_metrics_meta_t;
 
@@ -110,6 +111,20 @@ void esp_diag_metrics_meta_print_all(void);
  * @return ESP_OK if successful, appropriate error code otherwise.
  */
 esp_err_t esp_diag_metrics_unregister(const char *tag, const char *key);
+
+/**
+ * @brief Specify unit of the data for the particular key
+ *
+ * @param[in] tag Tag of the metrics
+ * @param[in] key   Key for which the unit to be specified
+ * @param[in] unit  Unit string of the data
+ *
+ * @return ESP_OK if successful, appropriate error code othewise.
+ *
+ * @note this API if used, should be called after \ref esp_diag_metrics_register
+ *      API with the same `key` to take effect
+ */
+esp_err_t esp_diag_metrics_add_unit(const char *tag, const char *key, const char *unit);
 
 /**
  * @brief Add metrics to storage
@@ -214,6 +229,19 @@ esp_err_t esp_diag_metrics_report_str(const char *tag, const char *key, const ch
  * Legacy version of metrics_unregister without `tag` parameter
  */
 esp_err_t esp_diag_metrics_unregister(const char *key);
+
+/**
+ * @brief Specify unit of the data for the particular key
+ *
+ * @param[in] key   Key for which the unit to be specified
+ * @param[in] unit  Unit string of the data
+ *
+ * @return ESP_OK if successful, appropriate error code othewise.
+ *
+ * @note this API if used, should be called after \ref esp_diag_metrics_register
+ *      API with the same `key` to take effect
+ */
+esp_err_t esp_diag_metrics_add_unit(const char *key, const char *unit);
 
 /**
  * @brief Add the metrics of data type `data_type`

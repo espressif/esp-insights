@@ -16,6 +16,7 @@
 
 #define LOG_TAG            "wifi_metrics"
 #define METRICS_TAG        "wifi"
+#define METRICS_UNIT       "dB"
 #define KEY_RSSI           "rssi"
 #define KEY_MIN_RSSI       "min_rssi_ever"
 #define KEY_STATUS         "conn_status"
@@ -180,7 +181,13 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     esp_diag_metrics_register(METRICS_TAG, KEY_RSSI, "Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
     esp_diag_metrics_register(METRICS_TAG, KEY_MIN_RSSI, "Minimum ever Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
     esp_diag_metrics_register(METRICS_TAG, KEY_STATUS, "Wi-Fi connect status", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_BOOL);
-
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_RSSI, METRICS_UNIT);
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_MIN_RSSI, METRICS_UNIT);
+#else
+    esp_diag_metrics_add_unit(KEY_RSSI, METRICS_UNIT);
+    esp_diag_metrics_add_unit(KEY_MIN_RSSI, METRICS_UNIT);
+#endif
     s_priv_data.min_rssi = WIFI_RSSI_THRESHOLD;
     s_priv_data.handle = xTimerCreate("wifi_metrics", SEC2TICKS(DEFAULT_POLLING_INTERVAL),
                                       pdTRUE, NULL, wifi_timer_cb);

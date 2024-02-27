@@ -16,6 +16,7 @@
 
 #define LOG_TAG            "heap_metrics"
 #define METRICS_TAG        "heap"
+#define METRICS_UNIT       "bytes"
 
 #define KEY_ALLOC_FAIL     "alloc_fail"
 #define KEY_FREE           "free"
@@ -133,19 +134,40 @@ esp_err_t esp_diag_heap_metrics_init(void)
         return err;
     }
     esp_diag_metrics_register(METRICS_TAG, KEY_ALLOC_FAIL, "Malloc fail", METRICS_TAG, ESP_DIAG_DATA_TYPE_UINT);
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_ALLOC_FAIL, METRICS_UNIT);
+#else
+    esp_diag_metrics_add_unit(KEY_ALLOC_FAIL, METRICS_UNIT);
+#endif
 #endif
 
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
     esp_diag_metrics_register(METRICS_TAG, KEY_EXT_FREE, "External free heap", PATH_HEAP_EXTERNAL, ESP_DIAG_DATA_TYPE_UINT);
     esp_diag_metrics_register(METRICS_TAG, KEY_EXT_LFB, "External largest free block", PATH_HEAP_EXTERNAL, ESP_DIAG_DATA_TYPE_UINT);
     esp_diag_metrics_register(METRICS_TAG, KEY_EXT_MIN_FREE, "External minimum free size", PATH_HEAP_EXTERNAL, ESP_DIAG_DATA_TYPE_UINT);
-
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_EXT_FREE, METRICS_UNIT);
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_EXT_LFB, METRICS_UNIT);
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_EXT_MIN_FREE, METRICS_UNIT);
+#else
+    esp_diag_metrics_add_unit(KEY_EXT_FREE, METRICS_UNIT);
+    esp_diag_metrics_add_unit(KEY_EXT_LFB, METRICS_UNIT);
+    esp_diag_metrics_add_unit(KEY_EXT_MIN_FREE, METRICS_UNIT);
+#endif
 #endif /* CONFIG_ESP32_SPIRAM_SUPPORT */
 
     esp_diag_metrics_register(METRICS_TAG, KEY_FREE, "Free heap", PATH_HEAP_INTERNAL, ESP_DIAG_DATA_TYPE_UINT);
     esp_diag_metrics_register(METRICS_TAG, KEY_LFB, "Largest free block", PATH_HEAP_INTERNAL, ESP_DIAG_DATA_TYPE_UINT);
     esp_diag_metrics_register(METRICS_TAG, KEY_MIN_FREE, "Minimum free size", PATH_HEAP_INTERNAL, ESP_DIAG_DATA_TYPE_UINT);
-
+#ifndef CONFIG_ESP_INSIGHTS_META_VERSION_10
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_FREE, METRICS_UNIT);
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_LFB, METRICS_UNIT);
+    esp_diag_metrics_add_unit(METRICS_TAG, KEY_MIN_FREE, METRICS_UNIT);
+#else
+    esp_diag_metrics_add_unit(KEY_FREE, METRICS_UNIT);
+    esp_diag_metrics_add_unit(KEY_LFB, METRICS_UNIT);
+    esp_diag_metrics_add_unit(KEY_MIN_FREE, METRICS_UNIT);
+#endif
     s_priv_data.handle = xTimerCreate("heap_metrics", SEC2TICKS(DEFAULT_POLLING_INTERVAL),
                                       pdTRUE, NULL, heap_timer_cb);
     if (s_priv_data.handle) {
