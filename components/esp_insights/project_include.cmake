@@ -3,7 +3,7 @@ idf_build_get_property(idf_path IDF_PATH)
 idf_build_get_property(build_dir BUILD_DIR)
 
 set(PROJ_BUILD_CONFIG_FILE project_build_config.json)
-set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-v${PROJECT_VER})
+set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VER})
 
 if(CONFIG_ESP_INSIGHTS_ENABLED)
 # This will create the archive tar
