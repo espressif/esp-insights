@@ -26,7 +26,7 @@
 #define METRICS_PATH_VALUE      "M"
 #define VARIABLES_PATH_VALUE    "P"
 
-static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map;
+static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map, s_diag_conf_map;
 static CborEncoder s_meta_encoder, s_meta_result_map, s_diag_meta_map, s_diag_meta_data_map;
 
 #define CBOR_ENC_MAX_CBS    10
@@ -81,9 +81,20 @@ void esp_insights_cbor_encode_diag_data_begin(void)
     cbor_encoder_create_map(&s_diag_map, &s_diag_data_map, CborIndefiniteLength);
 }
 
+void esp_insights_cbor_encode_diag_conf_data_begin(void)
+{
+    cbor_encode_text_stringz(&s_diag_data_map, "configs");
+    cbor_encoder_create_array(&s_diag_data_map, &s_diag_conf_map, CborIndefiniteLength);
+}
+
 void esp_insights_cbor_encode_diag_data_end(void)
 {
     cbor_encoder_close_container(&s_diag_map, &s_diag_data_map);
+}
+
+void esp_insights_cbor_encode_diag_conf_data_end(void)
+{
+    cbor_encoder_close_container(&s_diag_data_map, &s_diag_conf_map);
 }
 
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE

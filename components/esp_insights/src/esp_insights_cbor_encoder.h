@@ -75,3 +75,14 @@ void esp_insights_cbor_encode_meta_variables(const esp_diag_variable_meta_t *var
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 void esp_insights_cbor_encode_meta_data_end(void);
 size_t esp_insights_cbor_encode_meta_end(void *data);
+
+
+/* For encoding conf data */
+void esp_insights_cbor_encode_conf_meta_begin(void *data, size_t data_size, const char *version, const char *sha256);
+void esp_insights_cbor_encode_conf_meta_data_begin(void);
+void esp_insights_cbor_encode_conf_meta_data_end(void);
+size_t esp_insights_cbor_encode_conf_meta_end(void *data);
+
+void esp_insights_cbor_encode_diag_conf_data_begin(void);
+void esp_insights_cbor_encode_diag_conf_data_end(void);
+void esp_insights_cbor_encode_diag_conf_data(void);

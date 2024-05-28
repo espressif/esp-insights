@@ -11,7 +11,7 @@
 #endif
 
 size_t esp_insights_encode_meta(uint8_t *out_data, size_t out_data_size, char *sha256);
-
+size_t esp_insights_encode_conf_meta(uint8_t *out_data, size_t out_data_size, char *sha256);
 esp_err_t esp_insights_encode_data_begin(uint8_t *out_data, size_t out_data_size);
 void esp_insights_encode_boottime_data(void);
 

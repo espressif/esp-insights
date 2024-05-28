@@ -203,6 +203,31 @@ void esp_insights_disable(void);
 const char *esp_insights_get_node_id(void);
 
 /**
+ * @brief Check if insights reporting is enabled
+ *
+ * @return true reporting is on
+ * @return false reporting is off
+ */
+bool esp_insights_is_reporting_enabled(void);
+
+/**
+ * @brief Turn on the Insights reporting
+ *
+ * @return esp_err_t ESP_OK on success, apt error otherwise
+ */
+esp_err_t esp_insights_reporting_enable();
+
+/**
+ * @brief Turn off the Insights repoting
+ *
+ * @return esp_err_t ESP_OK on success, apt error otherwise
+ * @note meta message if changed and the boot message will still be
+ *  sent as this information is critical for Insights working with the
+ *  cloud. You may disable insight completely using esp_insights_disable
+ */
+esp_err_t esp_insights_reporting_disable();
+
+/**
  * @brief Encode and parse the command directly using esp-insight's parser
  *
  * This tests only if the parser is working as expected.

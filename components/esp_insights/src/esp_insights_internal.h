@@ -48,6 +48,11 @@ void esp_insights_transport_disconnect(void);
 int esp_insights_transport_data_send(void *data, size_t len);
 
 /**
+ * @brief Send update to the cloud about new state
+ */
+void esp_insights_report_config_update(void);
+
+/**
  * @brief Get node id
  *
  * For MQTT transports if node id is present in factory partition then it is returned,

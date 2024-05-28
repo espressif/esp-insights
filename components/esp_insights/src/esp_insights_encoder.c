@@ -32,6 +32,7 @@
 
 #define INSIGHTS_DATA_TYPE          0x02
 #define INSIGHTS_META_DATA_TYPE     0x03
+#define INSIGHTS_CONF_DATA_TYPE     0x12
 #define TLV_OFFSET                  3
 
 static void esp_insights_encode_meta_data(void)
@@ -85,6 +86,27 @@ esp_err_t esp_insights_encode_data_begin(void *out_data, size_t out_data_size)
     return ESP_OK;
 }
 
+size_t esp_insights_encode_conf_meta(uint8_t *out_data, size_t out_data_size, char *sha256)
+{
+    if (!out_data || !out_data_size) {
+        return 0;
+    }
+    esp_insights_cbor_encode_meta_begin(out_data + TLV_OFFSET,
+                                        out_data_size - TLV_OFFSET,
+                                        INSIGHTS_META_VERSION, sha256);
+    esp_insights_cbor_encode_conf_meta_data_begin();
+    /* TODO: Implement and collect diagnostics specific conf meta */
+    // esp_insights_encode_conf_meta_data();
+    esp_insights_cbor_encode_conf_meta_data_end();
+
+    uint16_t len = esp_insights_cbor_encode_meta_end(out_data + TLV_OFFSET);
+
+    out_data[0] = INSIGHTS_META_DATA_TYPE;      /* Data type inidcation diagnostics meta - 1 byte */
+    memcpy(&out_data[1], &len, sizeof(len));    /* Data length - 2 bytes */
+    len += TLV_OFFSET;
+    return len;
+}
+
 void esp_insights_encode_boottime_data(void)
 {
     /* encode device info */
@@ -110,6 +132,29 @@ void esp_insights_encode_boottime_data(void)
         ESP_LOGE(TAG, "Core dump stored in flash is corrupted");
     }
 #endif /* CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE */
+}
+
+void esp_insights_encode_conf_data()
+{
+    /* collect the configs */
+    esp_insights_cbor_encode_diag_conf_data_begin();
+    esp_insights_cbor_encode_diag_conf_data();
+    esp_insights_cbor_encode_diag_conf_data_end();
+}
+
+
+size_t esp_insights_encode_conf_end(uint8_t *out_data)
+{
+    if (!out_data) {
+        return 0;
+    }
+    esp_insights_cbor_encode_diag_data_end();
+    uint16_t len = esp_insights_cbor_encode_diag_end(out_data + TLV_OFFSET);
+
+    out_data[0] = INSIGHTS_CONF_DATA_TYPE;      /* Data type indicating diagnostics - 1 byte */
+    memcpy(&out_data[1], &len, sizeof(len));    /* Data length - 2 bytes */
+    len += TLV_OFFSET;
+    return len;
 }
 
 size_t esp_insights_encode_critical_data(const void *data, size_t data_size)

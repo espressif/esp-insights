@@ -378,8 +378,7 @@ static esp_err_t esp_insights_cmd_resp_parse_execute(cbor_parse_ctx_t *ctx)
         cmd_cnt++;
     }
     if (cmd_cnt) {
-        /* TODO: Report modified configs */
-        // esp_insights_report_config_update();
+        esp_insights_report_config_update();
     }
     esp_insights_cbor_decoder_exit_container(ctx);
     ESP_LOGI(TAG, "parsed and executed %d commands", cmd_cnt);
