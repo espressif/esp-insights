@@ -12,7 +12,6 @@ if(DEFINED ENV{INSIGHTS_PATH})
 else()
   set(INSIGHTS_PATH ${CMAKE_CURRENT_LIST_DIR}/../..)
 endif(DEFINED ENV{INSIGHTS_PATH})
-list(APPEND EXTRA_COMPONENT_DIRS ${INSIGHTS_PATH}/components)
 
 set(PROJECT_VER "1.0")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
