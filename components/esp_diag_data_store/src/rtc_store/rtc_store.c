@@ -12,7 +12,6 @@
 #include <esp_system.h>
 #include <esp_log.h>
 #include <nvs_flash.h>
-#include <esp_ota_ops.h>
 
 #include <esp_diag_data_store.h>
 #include "rtc_store.h"
@@ -26,6 +25,8 @@
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include <esp_random.h> // esp_system.h does not provice esp_random() API from IDF v5.0
 #include <esp_app_desc.h> // for `esp_app_get_elf_sha256` API
+#else
+#include <esp_ota_ops.h>
 #endif
 
 #define TAG "RTC_STORE"
