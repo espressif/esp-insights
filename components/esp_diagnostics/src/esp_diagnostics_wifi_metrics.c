@@ -5,6 +5,7 @@
  */
 
 #include <string.h>
+#include <esp_idf_version.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
