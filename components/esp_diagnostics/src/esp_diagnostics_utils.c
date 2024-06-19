@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include "esp_partition.h"
+#include "esp_idf_version.h"
 #include "esp_diagnostics.h"
 #include "esp_ota_ops.h"
 #include "esp_log.h"

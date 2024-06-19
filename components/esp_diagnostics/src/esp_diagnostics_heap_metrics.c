@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include <esp_heap_caps.h>
+#include <esp_idf_version.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
 
