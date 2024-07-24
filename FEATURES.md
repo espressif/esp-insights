@@ -8,6 +8,7 @@ Below are some of the features offered by ESP Insights:
 - [Transport Sharing](#transport-sharing)
 - [Optimising Device-Cloud Communication](#optimising-device-cloud-communication)
 - [Group Analytics](#group-analytics)
+- [Command Response](#command-response)
 
 ### Core Dump
 In case of a firmware crash, the Insights agent captures the core dump information into the flash memory and reports it to the ESP Insights cloud in the subsequent boot-up. This allows you to look at all the crash logs that the devices may be generating in the field.
@@ -123,7 +124,7 @@ esp_diag_wifi_metrics_dump();
 ```
 
 #### Custom Metrics
-It is fairly simple to register your own metrics as well. This can be done as: 
+It is fairly simple to register your own metrics as well. This can be done as:
 
 ```
 /* Register a metrics to track room temperature */
@@ -180,7 +181,7 @@ As you may notice, every variable has some metadata associated with it. Some exp
 ### Transport Sharing
 The Insights agent supports sending data to the cloud using HTTPS or MQTT (TLS) transport.
 
-Creating a separate TLS session on the device could add to the memory consumption on the device. 
+Creating a separate TLS session on the device could add to the memory consumption on the device.
 To avoid this, the Insights agent shares the transport (MQTT) with your cloud agent.
 Currently the RainMaker cloud agent is supported.
 This ensures that we reuse the socket/TLS connection without adding a connection memory overhead on your device.
@@ -222,3 +223,7 @@ You can change the interval to hour or aggregate to week or a month interval.
 ![Group Analytics 5](docs/_static/group_analytics_5.png)
 
 - List of top nodes having the most number of events and can be drilled down to category level
+
+### Command Response
+ESP Insights leverages RainMaker's command response feature to enable the device to be controllable from the Insights dashboard.
+- When enabled, this feature lists options under the Node's Settings tab. These interactive options can be used to control the device. For example, an admin can remotely reboot the device, enable or disable diagnostics collection, or granularly choose to enable or disable features such as Metrics and Variables.
