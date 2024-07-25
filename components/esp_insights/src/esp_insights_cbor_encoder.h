@@ -20,6 +20,28 @@
 #define NEW_META_STRUCT 1
 #endif
 
+typedef enum {
+    INSIGHTS_MSG_TYPE_META,
+    INSIGHTS_MSG_TYPE_DATA
+} insights_msg_type_t;
+
+/**
+ * @brief cbor encoder callback
+ *
+ * @param map   parent map to which new data will be encoded
+ * @param type  information type to be collected
+ */
+typedef void (*insights_cbor_encoder_cb_t) (CborEncoder *map, insights_msg_type_t type);
+
+/**
+ * @brief register a meta collection callback
+ *
+ * @param cb callback of type \ref insights_cbor_encoder_cb_t
+ *
+ * @return ESP_OK on success, appropriate error otherwise
+ */
+esp_err_t esp_insights_cbor_encoder_register_meta_cb(insights_cbor_encoder_cb_t cb);
+
 void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version);
 void esp_insights_cbor_encode_diag_data_begin(void);
 void esp_insights_cbor_encode_diag_boot_info(esp_diag_device_info_t *device_info);
@@ -53,3 +75,14 @@ void esp_insights_cbor_encode_meta_variables(const esp_diag_variable_meta_t *var
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 void esp_insights_cbor_encode_meta_data_end(void);
 size_t esp_insights_cbor_encode_meta_end(void *data);
+
+
+/* For encoding conf data */
+void esp_insights_cbor_encode_conf_meta_begin(void *data, size_t data_size, const char *version, const char *sha256);
+void esp_insights_cbor_encode_conf_meta_data_begin(void);
+void esp_insights_cbor_encode_conf_meta_data_end(void);
+size_t esp_insights_cbor_encode_conf_meta_end(void *data);
+
+void esp_insights_cbor_encode_diag_conf_data_begin(void);
+void esp_insights_cbor_encode_diag_conf_data_end(void);
+void esp_insights_cbor_encode_diag_conf_data(void);

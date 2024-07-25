@@ -26,10 +26,26 @@
 #define METRICS_PATH_VALUE      "M"
 #define VARIABLES_PATH_VALUE    "P"
 
-static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map;
+static CborEncoder s_encoder, s_result_map, s_diag_map, s_diag_data_map, s_diag_conf_map;
 static CborEncoder s_meta_encoder, s_meta_result_map, s_diag_meta_map, s_diag_meta_data_map;
 
+#define CBOR_ENC_MAX_CBS    10
+static struct cbor_encoder_data {
+    insights_cbor_encoder_cb_t cb[CBOR_ENC_MAX_CBS];
+    int cb_cnt;
+} s_priv_data;
+
 static inline void _cbor_encode_meta_hdr(CborEncoder *hdr_map, const rtc_store_meta_header_t *hdr);
+
+esp_err_t esp_insights_cbor_encoder_register_meta_cb(insights_cbor_encoder_cb_t cb)
+{
+    if (s_priv_data.cb_cnt == CBOR_ENC_MAX_CBS) {
+        return ESP_ERR_NO_MEM;
+    }
+    ESP_LOGV(TAG, "Registering callback %p", cb);
+    s_priv_data.cb[s_priv_data.cb_cnt++] = cb;
+    return ESP_OK;
+}
 
 void esp_insights_cbor_encode_diag_begin(void *data, size_t data_size, const char *version)
 {
@@ -65,9 +81,20 @@ void esp_insights_cbor_encode_diag_data_begin(void)
     cbor_encoder_create_map(&s_diag_map, &s_diag_data_map, CborIndefiniteLength);
 }
 
+void esp_insights_cbor_encode_diag_conf_data_begin(void)
+{
+    cbor_encode_text_stringz(&s_diag_data_map, "configs");
+    cbor_encoder_create_array(&s_diag_data_map, &s_diag_conf_map, CborIndefiniteLength);
+}
+
 void esp_insights_cbor_encode_diag_data_end(void)
 {
     cbor_encoder_close_container(&s_diag_map, &s_diag_data_map);
+}
+
+void esp_insights_cbor_encode_diag_conf_data_end(void)
+{
+    cbor_encoder_close_container(&s_diag_data_map, &s_diag_conf_map);
 }
 
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
@@ -677,6 +704,25 @@ void esp_insights_cbor_encode_meta_data_begin(void)
 }
 
 void esp_insights_cbor_encode_meta_data_end(void)
+{
+    cbor_encoder_close_container(&s_diag_meta_map, &s_diag_meta_data_map);
+}
+
+void esp_insights_cbor_encode_conf_meta_data_begin(void)
+{
+    cbor_encode_text_stringz(&s_diag_meta_map, "data");
+    cbor_encoder_create_map(&s_diag_meta_map, &s_diag_meta_data_map, CborIndefiniteLength);
+#ifdef NEW_META_STRUCT
+    for (int i = 0; i < s_priv_data.cb_cnt; i++) {
+        if (s_priv_data.cb[i]) {
+            s_priv_data.cb[i] (&s_diag_meta_data_map, INSIGHTS_MSG_TYPE_META);
+        }
+    }
+#endif
+}
+
+/** Vikram: remove? */
+void esp_insights_cbor_encode_conf_meta_data_end(void)
 {
     cbor_encoder_close_container(&s_diag_meta_map, &s_diag_meta_data_map);
 }

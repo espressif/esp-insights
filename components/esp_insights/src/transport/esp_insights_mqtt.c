@@ -156,13 +156,23 @@ static void esp_insights_mqtt_disconnect(void)
     }
 }
 
-static esp_err_t esp_insights_mqtt_publish(const char *topic, void *data, size_t data_len, uint8_t qos, int *msg_id)
+esp_err_t esp_insights_mqtt_publish(const char *topic, void *data, size_t data_len, uint8_t qos, int *msg_id)
 {
     if (s_mqtt_data.mqtt_config.publish) {
         return s_mqtt_data.mqtt_config.publish(topic, data, data_len, qos, msg_id);
     }
     ESP_LOGW(TAG, "esp_insights_mqtt_publish not registered");
     return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t esp_insights_mqtt_subscribe(const char *topic, esp_rmaker_mqtt_subscribe_cb_t cb, uint8_t qos, void *priv_data)
+{
+    if (s_mqtt_data.mqtt_config.subscribe) {
+        ESP_LOGI(TAG, "subscribing to %s", topic);
+        return s_mqtt_data.mqtt_config.subscribe(topic, cb, qos, priv_data);
+    }
+    ESP_LOGW(TAG, "esp_insights_mqtt_subscribe not registered");
+    return ESP_OK;
 }
 
 static int esp_insights_mqtt_data_send(void *data, size_t len)

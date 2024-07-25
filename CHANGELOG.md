@@ -1,3 +1,11 @@
+## 24-Jul-2024 (Command Response Framework and Components update)
+- Added support for command response framework
+  - To demonstrate this, a simple reboot command has been added. Admins can trigger this command from the Insights dashboard (under Node's Settings tab) to reboot the device.
+  - This feature is currently supported only for nodes claimed from the RainMaker CLI and when MQTT transport is enabled.
+- Updated components:
+  - Updated the rmaker_common submodule.
+  - Bumped up the component versions for `esp_diagnostics` and `esp_insights`.
+
 ## 23-Feb-2024 (Added support for new metadata structure 2.0)
 
 - This change has been introduced for better management of metrics and variables hierarchy

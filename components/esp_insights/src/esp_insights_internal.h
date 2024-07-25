@@ -9,8 +9,14 @@
 #include <esp_err.h>
 
 #ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT
+#include <esp_rmaker_mqtt_glue.h>
+
 /* Default configurations for rmaker mqtt glue lib */
 extern esp_insights_transport_config_t g_default_insights_transport_mqtt;
+
+/* other functions for more granularity */
+esp_err_t esp_insights_mqtt_publish(const char *topic, void *data, size_t data_len, uint8_t qos, int *msg_id);
+esp_err_t esp_insights_mqtt_subscribe(const char *topic, esp_rmaker_mqtt_subscribe_cb_t cb, uint8_t qos, void *priv_data);
 #else
 /* Default configurations for https */
 extern esp_insights_transport_config_t g_default_insights_transport_https;
@@ -40,6 +46,11 @@ void esp_insights_transport_disconnect(void);
  *                 On success, message-id(positive integer) if data send happened asynchronously.
  */
 int esp_insights_transport_data_send(void *data, size_t len);
+
+/**
+ * @brief Send update to the cloud about new state
+ */
+void esp_insights_report_config_update(void);
 
 /**
  * @brief Get node id

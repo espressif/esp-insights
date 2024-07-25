@@ -1,18 +1,20 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/timers.h>
+#include <freertos/semphr.h>
 
 #include <string.h>
 #include <esp_log.h>
 #include <esp_wifi.h>
 #include <esp_core_dump.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/timers.h>
+
 #include <nvs.h>
 #include <esp_crc.h>
-#include <freertos/semphr.h>
 #include <esp_diag_data_store.h>
 #include <esp_diagnostics.h>
 #include <esp_diagnostics_metrics.h>
@@ -28,6 +30,10 @@
 #include "esp_insights_client_data.h"
 #include "esp_insights_encoder.h"
 #include "esp_insights_cbor_decoder.h"
+
+#ifdef CONFIG_ESP_INSIGHTS_CMD_RESP_ENABLED
+#define INSIGHTS_CMD_RESP 1
+#endif
 
 #include <esp_idf_version.h>
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
@@ -60,13 +66,18 @@
 
 #define SEND_INSIGHTS_META (CONFIG_DIAG_ENABLE_METRICS || CONFIG_DIAG_ENABLE_VARIABLES)
 
+/* TAG for reporting generic miscellaneous insights. Different from ESP_LOGx tag */
 #define TAG_DIAG            "diag"
 #define KEY_LOG_WR_FAIL     "log_wr_fail"
 
 #define DIAG_DATA_STORE_CRC_KEY "rtc_buf_sha"
-#define INSIGHTS_NVS_NAMESPACE "storage"
+#define INSIGHTS_NVS_NAMESPACE  "storage"
 
 ESP_EVENT_DEFINE_BASE(INSIGHTS_EVENT);
+
+#ifdef CONFIG_ESP_INSIGHTS_ENABLED
+
+static const char *TAG = "esp_insights"; /* tag for ESP_LOGx */
 
 typedef struct esp_insights_entry {
     esp_rmaker_work_fn_t work_fn;
@@ -86,6 +97,10 @@ typedef struct {
     char app_sha256[APP_ELF_SHA256_LEN];
     bool data_sent;
 #if SEND_INSIGHTS_META
+#if INSIGHTS_CMD_RESP
+     bool conf_meta_msg_pending;
+     uint32_t conf_meta_msg_id;
+#endif
     bool meta_msg_pending;
     uint32_t meta_msg_id;
     uint32_t meta_crc;
@@ -95,15 +110,17 @@ typedef struct {
     TimerHandle_t data_send_timer; /* timer to reset data_send_inprogress flag on timeout */
     char *node_id;
     int boot_msg_id;   /* To track whether first message is sent or not, -1:failed, 0:success, >0:inprogress */
+#if INSIGHTS_CMD_RESP
+    int conf_msg_id;
+#endif
     bool init_done;     /* insights init done */
     bool enabled;       /* insights enable is done */
 } esp_insights_data_t;
 
-#ifdef CONFIG_ESP_INSIGHTS_ENABLED
-
-static const char *TAG = "esp_insights";
 static esp_insights_data_t s_insights_data;
 static esp_insights_entry_t *s_periodic_insights_entry;
+
+extern esp_err_t esp_insights_cmd_resp_init(void);
 
 static void esp_insights_first_call(void *priv_data)
 {
@@ -123,6 +140,14 @@ static bool is_insights_active(void)
     wifi_ap_record_t ap_info;
     bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
     return wifi_connected && s_insights_data.enabled;
+}
+
+/* Returns true if wifi is connected, false otherwise */
+static bool is_wifi_connected(void)
+{
+    wifi_ap_record_t ap_info;
+    bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
+    return wifi_connected;
 }
 
 /* This executes in the context of timer task.
@@ -171,16 +196,17 @@ static esp_err_t esp_insights_unregister_periodic_handler(void)
 {
     if (s_periodic_insights_entry) {
         if (s_periodic_insights_entry->timer) {
+            ESP_LOGI(TAG, "Stopping the periodic timer");
+            if (xTimerIsTimerActive(s_periodic_insights_entry->timer) == pdTRUE) {
+                xTimerStop(s_periodic_insights_entry->timer, portMAX_DELAY);
+             }
             ESP_LOGI(TAG, "Deleting the periodic timer");
-            if (xTimerDelete(s_periodic_insights_entry->timer, 10) != pdPASS) {
-                ESP_LOGE(TAG, "Failed to delete the periodic timer");
-            }
+            xTimerDelete(s_periodic_insights_entry->timer, portMAX_DELAY);
+            s_periodic_insights_entry->timer = NULL;
         }
 
-        if (s_periodic_insights_entry) {
-            free(s_periodic_insights_entry);
-            s_periodic_insights_entry = NULL;
-        }
+        free(s_periodic_insights_entry);
+        s_periodic_insights_entry = NULL;
     }
 
     return ESP_OK;
@@ -235,6 +261,11 @@ static void data_send_timeout_cb(TimerHandle_t handle)
     if (s_insights_data.boot_msg_id > 0) {
         s_insights_data.boot_msg_id = -1;
     }
+#if INSIGHTS_CMD_RESP
+    if (s_insights_data.conf_msg_id > 0) {
+        s_insights_data.conf_msg_id = -1;
+    }
+#endif
     xSemaphoreGive(s_insights_data.data_lock);
 }
 
@@ -272,6 +303,11 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
 #endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
                     s_insights_data.boot_msg_id = 0;
                 }
+#if INSIGHTS_CMD_RESP
+                else if (s_insights_data.conf_msg_id > 0 && s_insights_data.conf_msg_id == data->msg_id) {
+                    s_insights_data.conf_msg_id = 0;
+                }
+#endif
                 xSemaphoreGive(s_insights_data.data_lock);
             }
             break;
@@ -284,6 +320,11 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
             if (s_insights_data.boot_msg_id > 0 && data->msg_id == s_insights_data.boot_msg_id) {
                 s_insights_data.boot_msg_id = -1;
             }
+#if INSIGHTS_CMD_RESP
+            else if (s_insights_data.conf_msg_id > 0 && data->msg_id == s_insights_data.conf_msg_id) {
+                s_insights_data.conf_msg_id = -1;
+            }
+#endif
             xSemaphoreGive(s_insights_data.data_lock);
             break;
         default:
@@ -345,10 +386,19 @@ static void send_boottime_data(void)
     }
 }
 
+#if INSIGHTS_CMD_RESP
+static void send_insights_conf_meta(void);
+static void send_insights_config(void)
+{
+    send_insights_conf_meta();
+}
+#endif
+
 #if SEND_INSIGHTS_META
 /* Returns true if ESP Insights metadata CRC is changed */
 static bool insights_meta_changed(void)
 {
+    return true;
     uint32_t nvs_crc;
     uint32_t meta_crc = esp_diag_meta_crc_get();
     esp_err_t err = esp_insights_meta_nvs_crc_get(&nvs_crc);
@@ -392,6 +442,35 @@ static void send_insights_meta(void)
     }
 }
 #endif /* SEND_INSIGHTS_META */
+
+#if INSIGHTS_CMD_RESP
+static void send_insights_conf_meta(void)
+{
+    uint16_t len = 0;
+
+    memset(s_insights_data.scratch_buf, 0, INSIGHTS_DATA_MAX_SIZE);
+    len = esp_insights_encode_conf_meta(s_insights_data.scratch_buf, INSIGHTS_DATA_MAX_SIZE, s_insights_data.app_sha256);
+    if (len == 0) {
+#if INSIGHTS_DEBUG_ENABLED
+        ESP_LOGI(TAG, "No conf metadata to send");
+#endif
+        return;
+    }
+#if INSIGHTS_DEBUG_ENABLED
+    ESP_LOGI(TAG, "Insights conf meta data length %d", len);
+    insights_dbg_dump(s_insights_data.scratch_buf, len);
+#endif
+    int msg_id = esp_insights_transport_data_send(s_insights_data.scratch_buf, len);
+    if (msg_id > 0) {
+        xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+        s_insights_data.conf_meta_msg_pending = true;
+        s_insights_data.conf_meta_msg_id = msg_id;
+        xSemaphoreGive(s_insights_data.data_lock);
+    } else if (msg_id == 0) { /* sent successfully */
+        s_insights_data.conf_meta_msg_pending = false;
+    }
+}
+#endif
 
 /* Consider 100 bytes are published and received on cloud but RMAKER_MQTT_EVENT_PUBLISHED
  * event is not received for 100 bytes. In a mean time 50 bytes are added to the buffer.
@@ -474,6 +553,13 @@ data_send_end:
     xSemaphoreGive(s_insights_data.data_lock);
 }
 
+#if INSIGHTS_CMD_RESP
+static void __insights_report_config_update(void *priv_data)
+{
+    send_insights_config();
+}
+#endif
+
 static void insights_periodic_handler(void *priv_data)
 {
     xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
@@ -492,23 +578,57 @@ static void insights_periodic_handler(void *priv_data)
 #if SEND_INSIGHTS_META
     if (insights_meta_changed()) {
         send_insights_meta();
+#if INSIGHTS_CMD_RESP
+        send_insights_conf_meta();
+#endif
     }
 #endif /* SEND_INSIGHTS_META */
+
+#if INSIGHTS_CMD_RESP
+    xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
+    if (s_insights_data.conf_msg_id == -1) {
+        xSemaphoreGive(s_insights_data.data_lock);
+        send_insights_config();
+    } else {
+        xSemaphoreGive(s_insights_data.data_lock);
+    }
+#endif
+    xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
     if (s_insights_data.boot_msg_id == -1) {
+        xSemaphoreGive(s_insights_data.data_lock);
         send_boottime_data();
+    } else {
+        xSemaphoreGive(s_insights_data.data_lock);
     }
     send_insights_data();
 }
 
 esp_err_t esp_insights_send_data(void)
 {
-    if (is_insights_active() == true) {
+    if (is_wifi_connected() == true) {
         ESP_LOGI(TAG, "Sending data to cloud");
         return esp_rmaker_work_queue_add_task(insights_periodic_handler, NULL);
     }
     ESP_LOGW(TAG, "Wi-Fi not in connected state");
     return ESP_FAIL;
 }
+
+#if INSIGHTS_CMD_RESP
+void esp_insights_report_config_update(void)
+{
+    s_insights_data.conf_msg_id = -1;
+    if (is_wifi_connected() == true) {
+        /* if wifi is connected, immediately send the report */
+        /* if not, this will be reported from periodic handler */
+        esp_rmaker_work_queue_add_task(__insights_report_config_update, NULL);
+    }
+}
+#else
+void esp_insights_report_config_update(void)
+{
+    ESP_LOGI(TAG, "Not reporting config when cmd_resp is not enabled");
+}
+#endif
 
 static void data_store_event_handler(void* arg, esp_event_base_t event_base,
                                     int32_t event_id, void* event_data)
@@ -630,7 +750,7 @@ static void variables_init(void)
             ESP_LOGW(TAG, "Failed to initialize network variables");
         }
 #endif /* CONFIG_DIAG_ENABLE_NETWORK_VARIABLES */
-        esp_diag_variable_register("diag", KEY_LOG_WR_FAIL, "Log write fail count", "Diagnostics.Log", ESP_DIAG_DATA_TYPE_UINT);
+        esp_diag_variable_register(TAG_DIAG, KEY_LOG_WR_FAIL, "Log write fail count", "Diagnostics.Log", ESP_DIAG_DATA_TYPE_UINT);
         return;
     }
     ESP_LOGE(TAG, "Failed to initialize param-values.");
@@ -852,6 +972,9 @@ esp_err_t esp_insights_enable(esp_insights_config_t *config)
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
     s_insights_data.boot_msg_id = -1;
+#if INSIGHTS_CMD_RESP
+    s_insights_data.conf_msg_id = -1;
+#endif
     s_insights_data.data_send_timer = xTimerCreate("data_send_timer", CLOUD_REPORTING_TIMEOUT_TICKS,
                                                    pdFALSE, NULL, data_send_timeout_cb);
     if (!s_insights_data.data_send_timer) {
@@ -927,6 +1050,11 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
     }
 
     s_insights_data.init_done = true;
+
+    err = esp_insights_cmd_resp_init() || esp_insights_cmd_resp_enable();
+    if (err != ESP_OK) { /* device can keep working neverthless */
+        ESP_LOGE(TAG, "Failed to enable insights_cmd_resp");
+    }
     return ESP_OK;
 init_err:
     if (s_insights_data.node_id) {
