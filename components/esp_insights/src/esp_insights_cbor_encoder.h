@@ -86,3 +86,7 @@ size_t esp_insights_cbor_encode_conf_meta_end(void *data);
 void esp_insights_cbor_encode_diag_conf_data_begin(void);
 void esp_insights_cbor_encode_diag_conf_data_end(void);
 void esp_insights_cbor_encode_diag_conf_data(void);
+
+/* For converting 8 bytes sha256 to hex form */
+void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len);
+

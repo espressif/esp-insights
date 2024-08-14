@@ -82,7 +82,8 @@ esp_err_t esp_diag_device_info_get(esp_diag_device_info_t *device_info)
     device_info->reset_reason = esp_reset_reason();
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
     app_desc = esp_app_get_description();
-    esp_app_get_elf_sha256(device_info->app_elf_sha256, sizeof(device_info->app_elf_sha256));
+    const uint8_t* src = app_desc->app_elf_sha256;
+    memcpy((uint8_t *)device_info->app_elf_sha256, src, DIAG_SHA_SIZE);
 #else
     app_desc = esp_ota_get_app_description();
     esp_ota_get_app_elf_sha256(device_info->app_elf_sha256, sizeof(device_info->app_elf_sha256));

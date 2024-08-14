@@ -13,7 +13,8 @@
 extern "C" {
 #endif
 
-#define SHA_SIZE  (CONFIG_APP_RETRIEVE_LEN_ELF_SHA / 2)
+#define RTC_STORE_HEX_SHA_SIZE  16                              /* Length of ELF SHA as HEX string*/
+#define RTC_STORE_SHA_SIZE      (RTC_STORE_HEX_SHA_SIZE / 2)    /* Length of ELF SHA as raw bytes*/
 
 /**
  * @brief header record to identify firmware/boot data a record represent
@@ -21,7 +22,7 @@ extern "C" {
 typedef struct {
     uint8_t gen_id;             // generated on each hard reset
     uint8_t boot_cnt;           // updated on each soft reboot
-    char sha_sum[SHA_SIZE];     // elf shasum
+    char sha_sum[RTC_STORE_SHA_SIZE];     // elf shasum
     bool valid;                 //
 } rtc_store_meta_header_t;
 
