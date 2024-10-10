@@ -126,13 +126,15 @@ typedef struct {
 /**
  * @brief Device information structure
  */
+#define DIAG_HEX_SHA_SIZE   16                                  /* Length of ELF SHA as HEX string*/
+#define DIAG_SHA_SIZE       (DIAG_HEX_SHA_SIZE / 2)             /* Length of ELF SHA as raw bytes*/
 typedef struct {
     uint32_t chip_model;                                      /*!< Chip model */
     uint32_t chip_rev;                                        /*!< Chip revision */
     uint32_t reset_reason;                                    /*!< Reset reason */
     char app_version[32];                                     /*!< Application version */
     char project_name[32];                                    /*!< Project name */
-    char app_elf_sha256[CONFIG_APP_RETRIEVE_LEN_ELF_SHA + 1]; /*!< SHA256 of application elf */
+    char app_elf_sha256[DIAG_HEX_SHA_SIZE + 1]; /*!< SHA256 of application elf */
 } esp_diag_device_info_t;
 
 /**

@@ -61,10 +61,11 @@ size_t esp_insights_encode_meta(uint8_t *out_data, size_t out_data_size, char *s
     if (!out_data || !out_data_size) {
         return 0;
     }
-
+    char sha[DIAG_HEX_SHA_SIZE + 1];
+    bytes_to_hex((uint8_t *) sha256,(uint8_t *) sha, DIAG_SHA_SIZE);
     esp_insights_cbor_encode_meta_begin(out_data + TLV_OFFSET,
                                         out_data_size - TLV_OFFSET,
-                                        INSIGHTS_META_VERSION, sha256);
+                                        INSIGHTS_META_VERSION, sha);
     esp_insights_cbor_encode_meta_data_begin();
     esp_insights_encode_meta_data();
     esp_insights_cbor_encode_meta_data_end();
@@ -91,9 +92,11 @@ size_t esp_insights_encode_conf_meta(uint8_t *out_data, size_t out_data_size, ch
     if (!out_data || !out_data_size) {
         return 0;
     }
+    char sha[DIAG_HEX_SHA_SIZE + 1];
+    bytes_to_hex((uint8_t *) sha256,(uint8_t *) sha, DIAG_SHA_SIZE);
     esp_insights_cbor_encode_meta_begin(out_data + TLV_OFFSET,
                                         out_data_size - TLV_OFFSET,
-                                        INSIGHTS_META_VERSION, sha256);
+                                        INSIGHTS_META_VERSION, sha);
     esp_insights_cbor_encode_conf_meta_data_begin();
     /* TODO: Implement and collect diagnostics specific conf meta */
     // esp_insights_encode_conf_meta_data();

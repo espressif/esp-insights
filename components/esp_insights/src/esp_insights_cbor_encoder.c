@@ -196,7 +196,7 @@ static union encode_scratch_buf {
     esp_diag_data_pt_t data_pt;
 #endif
     esp_diag_log_data_t log_data_pt;
-    char sha_sum[2 * SHA_SIZE + 1];
+    char sha_sum[DIAG_HEX_SHA_SIZE + 1];
 } enc_scratch_buf;
 
 static inline uint8_t to_hex_digit(unsigned val)
@@ -204,7 +204,7 @@ static inline uint8_t to_hex_digit(unsigned val)
     return (val < 10) ? ('0' + val) : ('a' + val - 10);
 }
 
-static void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len)
+void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len)
 {
     for (int i = 0; i < in_len; i++) {
         dst[2 * i] = to_hex_digit(src[i] >> 4);
@@ -216,7 +216,7 @@ static void bytes_to_hex(uint8_t *src, uint8_t *dst, int in_len)
 static inline void _cbor_encode_meta_hdr(CborEncoder *hdr_map, const rtc_store_meta_header_t *hdr)
 {
     cbor_encode_text_stringz(hdr_map, "sha256");
-    bytes_to_hex((uint8_t *) hdr->sha_sum, (uint8_t *) enc_scratch_buf.sha_sum, SHA_SIZE); // expand uint8 packed data to hex
+    bytes_to_hex((uint8_t *) hdr->sha_sum, (uint8_t *) enc_scratch_buf.sha_sum, DIAG_SHA_SIZE); // expand uint8 packed data to hex
     cbor_encode_text_stringz(hdr_map, enc_scratch_buf.sha_sum);
     cbor_encode_text_stringz(hdr_map, "gen_id");
     cbor_encode_uint(hdr_map, hdr->gen_id);
@@ -684,8 +684,7 @@ void esp_insights_cbor_encode_meta_begin(void *data, size_t data_size, const cha
     cbor_encode_text_stringz(&s_diag_meta_map, version);
 
     cbor_encode_text_stringz(&s_diag_meta_map, "ts");
-    cbor_encode_uint(&s_diag_meta_map, esp_diag_timestamp_get());
-
+    cbor_encode_uint(&s_diag_meta_map, esp_diag_timestamp_get()); 
     cbor_encode_text_stringz(&s_diag_meta_map, "sha256");
     cbor_encode_text_stringz(&s_diag_meta_map, sha256);
 }
