@@ -8,7 +8,6 @@
 #include "esp_partition.h"
 #include "esp_idf_version.h"
 #include "esp_diagnostics.h"
-#include "esp_ota_ops.h"
 #include "esp_log.h"
 #include "sys/time.h"
 #include "esp_system.h"
@@ -22,6 +21,8 @@
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
 #include "esp_chip_info.h"
+#else
+#include "esp_ota_ops.h"
 #endif
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
