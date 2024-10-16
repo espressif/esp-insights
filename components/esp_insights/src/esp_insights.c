@@ -397,7 +397,6 @@ static void send_insights_config(void)
 /* Returns true if ESP Insights metadata CRC is changed */
 static bool insights_meta_changed(void)
 {
-    return true;
     uint32_t nvs_crc;
     uint32_t meta_crc = esp_diag_meta_crc_get();
     esp_err_t err = esp_insights_meta_nvs_crc_get(&nvs_crc);
@@ -405,7 +404,7 @@ static bool insights_meta_changed(void)
         /* crc found and matched, no need to send insights meta */
         return false;
     }
-    ESP_LOGI(TAG, "Insights metrics metadata changed");
+    ESP_LOGI(TAG, "Insights metadata changed");
     s_insights_data.meta_crc = meta_crc;
     return true;
 }
