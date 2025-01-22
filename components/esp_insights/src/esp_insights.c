@@ -278,25 +278,31 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
     }
     switch(event_id) {
         case INSIGHTS_EVENT_TRANSPORT_SEND_SUCCESS:
-#if INSIGHTS_DEBUG_ENABLED
-            ESP_LOGI(TAG, "Data send success, msg_id:%d.", data ? data->msg_id : 0);
-#endif
             if (data && data->msg_id) {
                 xSemaphoreTake(s_insights_data.data_lock, portMAX_DELAY);
-                if (xTimerIsTimerActive(s_insights_data.data_send_timer) == pdTRUE) {
-                    xTimerStop(s_insights_data.data_send_timer, portMAX_DELAY);
-                }
                 if (data->msg_id == s_insights_data.data_msg_id) {
+#if INSIGHTS_DEBUG_ENABLED
+                    ESP_LOGI(TAG, "Data message send success, msg_id:%d.", data ? data->msg_id : 0);
+#endif
                     esp_diag_data_store_critical_release(s_insights_data.data_msg_len);
                     s_insights_data.data_sent = true;
                     s_insights_data.data_send_inprogress = false;
+                    if (xTimerIsTimerActive(s_insights_data.data_send_timer) == pdTRUE) {
+                        xTimerStop(s_insights_data.data_send_timer, portMAX_DELAY);
+                    }
 #if SEND_INSIGHTS_META
                 } else if (s_insights_data.meta_msg_pending && data->msg_id == s_insights_data.meta_msg_id) {
+#if INSIGHTS_DEBUG_ENABLED
+                    ESP_LOGI(TAG, "Meta message send success, msg_id:%d.", data ? data->msg_id : 0);
+#endif
                     esp_insights_meta_nvs_crc_set(s_insights_data.meta_crc);
                     s_insights_data.meta_msg_pending = false;
                     s_insights_data.data_sent = true;
 #endif /* SEND_INSIGHTS_META */
                 } else if (s_insights_data.boot_msg_id > 0 && s_insights_data.boot_msg_id == data->msg_id) {
+#if INSIGHTS_DEBUG_ENABLED
+                    ESP_LOGI(TAG, "Boot message send success, msg_id:%d.", data ? data->msg_id : 0);
+#endif
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
                     esp_core_dump_image_erase();
 #endif // CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
@@ -304,9 +310,13 @@ static void insights_event_handler(void* arg, esp_event_base_t event_base,
                 }
 #if INSIGHTS_CMD_RESP
                 else if (s_insights_data.conf_msg_id > 0 && s_insights_data.conf_msg_id == data->msg_id) {
+#if INSIGHTS_DEBUG_ENABLED
+                    ESP_LOGI(TAG, "Conf message send success, msg_id:%d.", data ? data->msg_id : 0);
+#endif
                     s_insights_data.conf_msg_id = 0;
                 }
 #endif
+
                 xSemaphoreGive(s_insights_data.data_lock);
             }
             break;
