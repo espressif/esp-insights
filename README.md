@@ -94,7 +94,9 @@ For more details please head over to [examples](examples).
     - Critical: Errors, Warnings and Events
     - Non-Critical: Metrics and Variables
   - This data is then periodically encoded in CBOR format and is sent over the transport.
-  - The data send algorithm is dynamic withing a range. It adapts to the need of the reporting.
+  - The data send period is dynamic within a range. It adapts to the need of the reporting.
+  - > **_Note_** Please note that the crashdump data is erased from the flash partition of the device once it is sent to the Insights cloud. <br>
+  So, in case you need to debug the crash locally, in which case you have physical access to the device, you should disable crashdump data reporting.
 
 ### RTC data store
 ESP-Insight currently uses RTC memory to store the messages until it is sent to the cloud. Unlike, normal RAM, RTC store makes data available across soft resets. Thus, it brodens the usefulness of the data across reboot.
