@@ -24,6 +24,7 @@ menu "ESP Insights"
         help
             This option enables core dump summary functionality in insights.
             In case of crash, insights sends the core dump summary to cloud on next boot.
+            Once the core dump summary is sent to cloud, it is erased from flash partition of the device.
 
     choice ESP_INSIGHTS_TRANSPORT
         prompt "Insights default transport"
