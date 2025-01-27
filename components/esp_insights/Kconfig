@@ -81,4 +81,11 @@ menu "ESP Insights"
         help
             For users already using older metadata, this provides an option to keep using the same.
             This is important as the new metadata version (1.1), is not backwad compatible.
+    
+    config ESP_INSIGHTS_THREAD_ENABLED
+        bool "Check for Thread networks"
+        default n
+        help
+            For nodes connected to Thread networks, this option must be set to 'yes'.
+            This tells Insights to use the thread network for sending data to cloud.
 endmenu

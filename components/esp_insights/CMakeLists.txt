@@ -24,6 +24,10 @@ if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
     list(APPEND priv_req esp_wifi)
 endif()
 
+if(CONFIG_ESP_INSIGHTS_THREAD_ENABLED)
+    list(APPEND priv_req openthread)
+endif()
+
 set(pub_req esp_diagnostics)
 
 idf_component_register(SRCS ${srcs}
