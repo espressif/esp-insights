@@ -8,7 +8,6 @@ dependencies:
     version: ">=4.1"
   espressif/rmaker_common:
     version: "~1.4.0"
-    override_path: '../rmaker_common/'
   espressif/esp_diag_data_store:
     version: "1.0.2"
     override_path: '../esp_diag_data_store/'
