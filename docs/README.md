@@ -4,7 +4,7 @@ This folder contains source files of **ESP Insights API documentation**.
 
 # Hosted Documentation
 
-* Check the following link for the documentation: https://docs.espressif.com/projects/esp-insights
+* Check the following link for the documentation: https://docs.espressif.com/projects/esp-insights/en/main/esp32/index.html
 
 The above URL is for the main branch latest version.
 
