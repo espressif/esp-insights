@@ -100,7 +100,7 @@ void esp_insights_cbor_encode_diag_conf_data_end(void)
 #if CONFIG_ESP_INSIGHTS_COREDUMP_ENABLE
 void esp_insights_cbor_encode_diag_crash(esp_core_dump_summary_t *summary)
 {
-    uint8_t i;
+    uint32_t i = 0;
     CborEncoder crash_map, val_list, bt_list;
 
     cbor_encode_text_stringz(&s_diag_data_map, "crash");
