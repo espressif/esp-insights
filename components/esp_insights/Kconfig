@@ -3,6 +3,12 @@ menu "ESP Insights"
     config ESP_INSIGHTS_ENABLED
         bool "Enable ESP Insights"
         default n
+        select DIAG_ENABLE_WRAP_LOG_FUNCTIONS
+        help
+            Enable ESP Insights functionality.
+
+            This automatically selects log wrapping (DIAG_ENABLE_WRAP_LOG_FUNCTIONS) which is
+            required for ESP Insights to capture log messages.
 
     config ESP_INSIGHTS_DEBUG_ENABLED
         depends on ESP_INSIGHTS_ENABLED

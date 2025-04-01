@@ -34,16 +34,19 @@ idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS "include"
                     PRIV_REQUIRES ${priv_req})
 
-# If log level is set to NONE or if logging APIs are externally wrapped then skip
-# wrapping logging APIs here
-if ((NOT CONFIG_LOG_DEFAULT_LEVEL_NONE) AND (NOT CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP))
-    list(APPEND WRAP_FUNCTIONS esp_log_write esp_log_writev)
-endif()
+# Only wrap the log functions if ESP-INSIGHTS is enabled
+if(CONFIG_DIAG_ENABLE_WRAP_LOG_FUNCTIONS)
+    # If log level is set to NONE or if logging APIs are externally wrapped then skip
+    # wrapping logging APIs here
+    if ((NOT CONFIG_LOG_DEFAULT_LEVEL_NONE) AND (NOT CONFIG_DIAG_USE_EXTERNAL_LOG_WRAP))
+        list(APPEND WRAP_FUNCTIONS esp_log_write esp_log_writev)
+    endif()
 
-if(CONFIG_LIB_BUILDER_COMPILE)
-    list(APPEND WRAP_FUNCTIONS log_printf)
-endif()
+    if(CONFIG_LIB_BUILDER_COMPILE)
+        list(APPEND WRAP_FUNCTIONS log_printf)
+    endif()
 
-foreach(func ${WRAP_FUNCTIONS})
-     target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=${func}")
-endforeach()
+    foreach(func ${WRAP_FUNCTIONS})
+        target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=${func}")
+    endforeach()
+endif()

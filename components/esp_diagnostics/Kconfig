@@ -37,6 +37,15 @@ menu "Diagnostics"
             For some users, Wi-Fi logs may not be that useful.
             By default, diagnostics drops Wi-Fi logs. Set this config option to "n" for recording Wi-Fi logs.
 
+    config DIAG_ENABLE_WRAP_LOG_FUNCTIONS
+        bool "Enable wrapping of log functions"
+        default n
+        help
+            This option enables wrapping of esp_log_write and esp_log_writev APIs using `--wrap` gcc option.
+            Enable this option when direct log access is required.
+
+            Note: This option is automatically selected when ESP Insights is enabled.
+
     config DIAG_ENABLE_METRICS
         bool "Enable diagnostics metrics"
         default y
