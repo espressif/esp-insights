@@ -34,8 +34,8 @@
 #define KEY_NETMASK        "netmask"
 #define KEY_GATEWAY        "gw"
 
-#define PATH_WIFI_STATION  "Wi-Fi.Station"
-#define PATH_IP_STATION    "IP.Station"
+#define PATH_WIFI_STATION  "Wi-Fi.AccessPoint"
+#define PATH_IP_STATION    "IPv4.Connection"
 #define PATH_WIFI_AP       "Wi-Fi.AP"
 
 typedef struct {
@@ -254,7 +254,7 @@ esp_err_t esp_diag_network_variables_init(void)
 #endif
 
     /* IP address variables */
-    esp_diag_variable_register(TAG_IP, KEY_IPv4, "IPv4", PATH_IP_STATION, ESP_DIAG_DATA_TYPE_IPv4);
+    esp_diag_variable_register(TAG_IP, KEY_IPv4, "Address", PATH_IP_STATION, ESP_DIAG_DATA_TYPE_IPv4);
     esp_diag_variable_register(TAG_IP, KEY_NETMASK, "Netmask", PATH_IP_STATION, ESP_DIAG_DATA_TYPE_IPv4);
     esp_diag_variable_register(TAG_IP, KEY_GATEWAY, "Gateway", PATH_IP_STATION, ESP_DIAG_DATA_TYPE_IPv4);
 
