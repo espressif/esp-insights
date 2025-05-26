@@ -10,6 +10,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/timers.h>
 #include <esp_wifi.h>
+#include "sdkconfig.h"
 
 #include <esp_rmaker_work_queue.h>
 #include <esp_diagnostics_metrics.h>
@@ -24,7 +25,13 @@
 
 #define PATH_WIFI_STATION  "Wi-Fi.Station"
 
+/* Use configurable polling interval with default fallback */
+#ifdef CONFIG_DIAG_WIFI_POLLING_INTERVAL
+#define DEFAULT_POLLING_INTERVAL CONFIG_DIAG_WIFI_POLLING_INTERVAL
+#else
 #define DEFAULT_POLLING_INTERVAL 30   /* 30 seconds */
+#endif
+
 /* start reporting minimum ever rssi when rssi reaches -50 dbm */
 #define WIFI_RSSI_THRESHOLD      -50
 

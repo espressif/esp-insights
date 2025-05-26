@@ -9,7 +9,7 @@ variables:
   MAKEFLAGS: "-j8 --no-keep-going"
   APP_BUILD: "all"
   GIT_SUBMODULE_STRATEGY: recursive
-  ESP_DOCS_ENV_IMAGE: "$CI_DOCKER_REGISTRY/esp-idf-doc-env-v5.0:2-2"
+  ESP_DOCS_ENV_IMAGE: "$CI_DOCKER_REGISTRY/esp-idf-doc-env-v5.4:1-1"
   ESP_DOCS_PATH: "$CI_PROJECT_DIR"
   LOCAL_REFERENCE_PATH: "/Users/espressif/local_reference/esp-idf"
 
