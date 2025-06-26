@@ -1,4 +1,4 @@
-version: "1.2.6"
+version: "1.2.7"
 description: Firmware agent for ESP Insights, which is a remote diagnostics solution to monitor the health of ESP devices in the field.
 url: https://github.com/espressif/esp-insights/tree/main/components/esp_insights
 repository: https://github.com/espressif/esp-insights.git
