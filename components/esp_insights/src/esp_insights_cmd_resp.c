@@ -293,7 +293,6 @@ static esp_err_t esp_insights_cmd_resp_parse_one_entry(cbor_parse_ctx_t *ctx)
     char *tmp_str = NULL;
     int cmd_depth = 0;
     bool cmd_value_b;
-    size_t val_sz = 0;
     esp_err_t ret = ESP_OK;
     char *cmd_tree[MAX_CMD_DEPTH] = {0, };
 
@@ -337,10 +336,8 @@ static esp_err_t esp_insights_cmd_resp_parse_one_entry(cbor_parse_ctx_t *ctx)
                 {
                 case ESP_DIAG_DATA_TYPE_BOOL:
                     cbor_value_get_boolean(it, &cmd_value_b);
-                    val_sz = 1;
                     break;
                 default:
-                    val_sz = 0;
                     break;
                 }
                 cbor_value_advance_fixed(it);
