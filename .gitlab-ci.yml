@@ -122,25 +122,12 @@ before_script:
     PEDANTIC_FLAGS: "-Werror -Werror=deprecated-declarations -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
     EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
     EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
-    COREDUMP_PATCH: "0"
-    COMPONENT_MGR_142: "0" # Fix component manager version to 1.4.2
   artifacts:
     paths:
       - $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}.zip
     expire_in: 6 mos
   script:
-    # Check and apply coredump patch for IDF 4.1 an 4.2
-    - cd $IDF_PATH
-    - cp $CI_PROJECT_DIR/idf-patches/Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch .
-    - if [[ "$COREDUMP_PATCH" == "1" ]]; then
-    - patch -p1 < Diagnostics-support-in-esp-idf-tag-v4.1.2-and-tag-v4.2.2.patch
-    - fi
-    - cd -
-    - if [[ "$COMPONENT_MGR_142" == "1" ]]; then
-    - pip install idf-component-manager==1.4.2
-    - else
     - pip install --upgrade idf-component-manager
-    - fi
     # build example
     - for APP in $APP_BUILD; do
     - if [[ "$APP_BUILD" == "all" || "$APP" == "minimal_diagnostics" ]]; then
@@ -155,41 +142,38 @@ before_script:
 build_idf_v5.0:
   extends: .build_template
   image: espressif/idf:release-v5.0
-  variables: # esp32c2 not included b'coz of link error on cpu coredump
-    EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
-
-build_idf_v4.4:
-  extends: .build_template
-  image: espressif/idf:release-v4.4
   variables:
-    EXAMPLE_TARGETS: esp32 esp32s2 esp32s3 esp32c3
-    COMPONENT_MGR_142: "1"
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3"
 
-build_idf_v4.3:
+build_idf_v5.1:
   extends: .build_template
-  image: espressif/idf:release-v4.3
+  image: espressif/idf:release-v5.1
   variables:
-    PEDANTIC_FLAGS: "-Werror=deprecated-declarations -Wno-error=cpp -Werror=unused-variable -Werror=unused-but-set-variable -Werror=unused-function"
-    EXTRA_CFLAGS: "${PEDANTIC_FLAGS}"
-    EXTRA_CXXFLAGS: "${PEDANTIC_FLAGS}"
-    EXAMPLE_TARGETS: esp32 esp32s2 esp32c3
-    COMPONENT_MGR_142: "1"
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
 
-build_idf_v4.2.2:
+build_idf_v5.2:
   extends: .build_template
-  image: espressif/idf:v4.2.2
+  image: espressif/idf:release-v5.2
   variables:
-    COREDUMP_PATCH: "1"
-    EXAMPLE_TARGETS: esp32
-    COMPONENT_MGR_142: "1"
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
 
-build_idf_v4.1.2:
+build_idf_v5.3:
   extends: .build_template
-  image: espressif/idf:v4.1.2
+  image: espressif/idf:release-v5.3
   variables:
-    COREDUMP_PATCH: "1"
-    EXAMPLE_TARGETS: esp32
-    COMPONENT_MGR_142: "1"
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
+
+build_idf_v5.4:
+  extends: .build_template
+  image: espressif/idf:release-v5.4
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
+
+build_idf_v5.5:
+  extends: .build_template
+  image: espressif/idf:release-v5.5
+  variables:
+    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
 
 schedule_refresh_local_reference:
   stage: sync
@@ -404,7 +388,7 @@ deploy_docs_production:
 
 push_main_to_github:
   stage: deploy
-  image: espressif/idf:release-v5.0
+  image: espressif/idf:release-v5.5
   tags:
     - build
   when: on_success
