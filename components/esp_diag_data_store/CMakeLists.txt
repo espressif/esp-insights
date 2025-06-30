@@ -3,7 +3,7 @@ set(req esp_event esp_hw_support)
 
 set(srcs "src/esp_diag_data_store.c")
 
-if (CONFIG_DIAG_DATA_STORE_RTC)
+if (CONFIG_DIAG_DATA_STORE_RTC OR CONFIG_DIAG_DATA_STORE_RAM)
 list(APPEND srcs "src/rtc_store/rtc_store.c")
 set(includes "src/rtc_store")
 endif()
