@@ -372,9 +372,9 @@ cbor_parse_ctx_t *esp_insights_cbor_decoder_start(const uint8_t *buffer, int len
         ESP_LOGE(TAG, "failed to allocate cbor ctx");
         return NULL;
     }
-    CborParser root_parser = ctx->root_parser;
+    CborParser *root_parser = &ctx->root_parser;
     CborValue *it = &ctx->it[0];
-    if (cbor_parser_init(buffer, len, 0, &root_parser, it) != CborNoError) {
+    if (cbor_parser_init(buffer, len, 0, root_parser, it) != CborNoError) {
         ESP_LOGE(TAG, "Error initializing cbor parser");
         return NULL;
     }
