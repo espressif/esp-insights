@@ -1,0 +1,7 @@
+menu "ESP Insights Test App"
+
+config APP_TEST_DATA_STORE
+    bool "Enable Data Store Test"
+    default y
+
+endmenu

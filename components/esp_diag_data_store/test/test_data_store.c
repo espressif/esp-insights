@@ -14,6 +14,8 @@
 #include <freertos/task.h>
 #include <esp_random.h>
 
+#if CONFIG_APP_TEST_DATA_STORE
+
 #define TAG              "diag_data_store_UT"
 #define NVS_KEY_B1_CHARS "b1_chars"
 #define NVS_KEY_B2_CHARS "b2_chars"
@@ -409,3 +411,4 @@ static void read_critical_data_in_rtc(void)
 TEST_CASE_MULTIPLE_STAGES("data store validate data in RTC after crash", "[data-store-rtc]",
                           write_critical_data_in_rtc_and_reset, read_critical_data_in_rtc);
 #endif /* CONFIG_DIAG_DATA_STORE_FLASH */
+#endif /* CONFIG_APP_TEST_DATA_STORE */
