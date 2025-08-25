@@ -773,21 +773,10 @@ static void variables_deinit(void)
 }
 #endif /* CONFIG_DIAG_ENABLE_VARIABLES */
 
-void esp_insights_disable(void)
+static void esp_insights_disable_internal(void *priv_data)
 {
-    s_insights_data.enabled = false;
+    (void) priv_data;
 
-    esp_insights_unregister_periodic_handler();
-#ifdef CONFIG_DIAG_ENABLE_VARIABLES
-    variables_deinit();
-#endif
-#ifdef CONFIG_DIAG_ENABLE_METRICS
-    metrics_deinit();
-#endif
-    esp_diag_log_hook_disable(ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT);
-    esp_diag_data_store_deinit();
-    esp_event_handler_unregister(INSIGHTS_EVENT, ESP_EVENT_ANY_ID, insights_event_handler);
-    esp_event_handler_unregister(ESP_DIAG_DATA_STORE_EVENT, ESP_EVENT_ANY_ID, data_store_event_handler);
     if (s_insights_data.data_lock) {
         vSemaphoreDelete(s_insights_data.data_lock);
         s_insights_data.data_lock = NULL;
@@ -804,6 +793,32 @@ void esp_insights_disable(void)
         free(s_insights_data.node_id);
         s_insights_data.node_id = NULL;
     }
+    ESP_LOGI(TAG, "Deinit done");
+}
+
+void esp_insights_disable(void)
+{
+    if (!s_insights_data.enabled) {
+        ESP_LOGI(TAG, "Insights is already disabled");
+        return;
+    }
+    s_insights_data.enabled = false;
+
+    esp_insights_unregister_periodic_handler();
+#ifdef CONFIG_DIAG_ENABLE_VARIABLES
+    variables_deinit();
+#endif
+#ifdef CONFIG_DIAG_ENABLE_METRICS
+    metrics_deinit();
+#endif
+    esp_diag_log_hook_disable(ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT);
+    esp_diag_data_store_deinit();
+    esp_event_handler_unregister(INSIGHTS_EVENT, ESP_EVENT_ANY_ID, insights_event_handler);
+    esp_event_handler_unregister(ESP_DIAG_DATA_STORE_EVENT, ESP_EVENT_ANY_ID, data_store_event_handler);
+
+    /* Let the existing Insights work to complete and then delete the semaphores */
+    ESP_LOGI(TAG, "Adding task to delete the semaphores");
+    esp_rmaker_work_queue_add_task(esp_insights_disable_internal, NULL);
 }
 
 void esp_insights_deinit(void)
