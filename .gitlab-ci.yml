@@ -139,12 +139,6 @@ before_script:
     - done
     - echo Build Complete for $APP_BUILD
 
-build_idf_v5.0:
-  extends: .build_template
-  image: espressif/idf:release-v5.0
-  variables:
-    EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3"
-
 build_idf_v5.1:
   extends: .build_template
   image: espressif/idf:release-v5.1

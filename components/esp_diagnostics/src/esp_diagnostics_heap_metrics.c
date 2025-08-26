@@ -116,7 +116,6 @@ static void heap_timer_cb(TimerHandle_t handle)
     esp_rmaker_work_queue_add_task(heap_metrics_dump_cb, NULL);
 }
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
 static void alloc_failed_hook(size_t size, uint32_t caps, const char *func)
 {
     esp_diag_heap_metrics_dump();
@@ -128,14 +127,12 @@ static void alloc_failed_hook(size_t size, uint32_t caps, const char *func)
 
     ESP_DIAG_EVENT(METRICS_TAG, KEY_ALLOC_FAIL " size:0x%x func:%s", size, func);
 }
-#endif
 
 esp_err_t esp_diag_heap_metrics_init(void)
 {
     if (s_priv_data.init) {
         return ESP_ERR_INVALID_STATE;
     }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
     esp_err_t err = heap_caps_register_failed_alloc_callback(alloc_failed_hook);
     if (err != ESP_OK) {
         return err;
@@ -145,7 +142,6 @@ esp_err_t esp_diag_heap_metrics_init(void)
     esp_diag_metrics_add_unit(METRICS_TAG, KEY_ALLOC_FAIL, METRICS_UNIT);
 #else
     esp_diag_metrics_add_unit(KEY_ALLOC_FAIL, METRICS_UNIT);
-#endif
 #endif
 
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
@@ -198,9 +194,7 @@ esp_err_t esp_diag_heap_metrics_deinit(void)
         ESP_LOGW(LOG_TAG, "Failed to delete heap metric timer");
     }
 #ifdef CONFIG_ESP_INSIGHTS_META_VERSION_10
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
     esp_diag_metrics_unregister(KEY_ALLOC_FAIL);
-#endif
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
     esp_diag_metrics_unregister(KEY_EXT_FREE);
     esp_diag_metrics_unregister(KEY_EXT_LFB);
@@ -210,9 +204,7 @@ esp_err_t esp_diag_heap_metrics_deinit(void)
     esp_diag_metrics_unregister(KEY_LFB);
     esp_diag_metrics_unregister(KEY_MIN_FREE);
 #else
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
     esp_diag_metrics_unregister(METRICS_TAG, KEY_ALLOC_FAIL);
-#endif
 #ifdef CONFIG_ESP32_SPIRAM_SUPPORT
     esp_diag_metrics_unregister(METRICS_TAG, KEY_EXT_FREE);
     esp_diag_metrics_unregister(METRICS_TAG, KEY_EXT_LFB);

@@ -1,4 +1,4 @@
-# ESP Insights (Beta)
+# ESP Insights
 
 ESP Insights is a remote diagnostics solution that allows users to remotely monitor the health of ESP devices in the field.
 

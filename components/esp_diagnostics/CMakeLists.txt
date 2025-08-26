@@ -18,17 +18,8 @@ if(CONFIG_DIAG_ENABLE_VARIABLES)
     endif()
 endif()
 
-set(priv_req freertos app_update rmaker_common)
-
-# esp_hw_support component was introduced in v4.3
-if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER "4.2")
-    list(APPEND priv_req esp_hw_support)
-endif()
-
-# from IDF version 5.0, we need to explicitly specify requirements
-if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
-    list(APPEND priv_req  esp_wifi esp_event)
-endif()
+set(priv_req freertos app_update rmaker_common
+             esp_hw_support esp_wifi esp_event)
 
 idf_component_register(SRCS "${srcs}"
                     INCLUDE_DIRS "include"
