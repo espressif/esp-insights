@@ -14,6 +14,8 @@
 #include <freertos/task.h>
 #include <esp_random.h>
 
+#if CONFIG_APP_TEST_DATA_STORE
+
 #define TAG              "diag_data_store_UT"
 #define NVS_KEY_B1_CHARS "b1_chars"
 #define NVS_KEY_B2_CHARS "b2_chars"
@@ -73,7 +75,7 @@ static void init_nvs_flash(void)
     TEST_ASSERT(err == ESP_OK);
 }
 
-TEST_CASE("data store init deinit", "[data-store]")
+TEST_CASE("data store init deinit", "[data-store][data-store-rtc]")
 {
     init_nvs_flash();
     TEST_ASSERT(rtc_store_init() == ESP_OK);
@@ -81,7 +83,7 @@ TEST_CASE("data store init deinit", "[data-store]")
     nvs_flash_deinit();
 }
 
-TEST_CASE("data store write", "[data-store]")
+TEST_CASE("data store write", "[data-store][data-store-rtc]")
 {
     uint32_t data = 0x1234;
 
@@ -102,7 +104,7 @@ TEST_CASE("data store write", "[data-store]")
     nvs_flash_deinit();
 }
 
-TEST_CASE("data store write read release_all", "[data-store]")
+TEST_CASE("data store write read release_all", "[data-store][data-store-rtc]")
 {
     size_t len = 0;
     uint32_t count = 10;
@@ -133,7 +135,7 @@ TEST_CASE("data store write read release_all", "[data-store]")
     nvs_flash_deinit();
 }
 
-TEST_CASE("data store wrapped_read write_till_exact_full", "[data-store]")
+TEST_CASE("data store wrapped_read write_till_exact_full", "[data-store][data-store-rtc]")
 {
     size_t len = 0;
     uint32_t count = 15;
@@ -179,7 +181,7 @@ TEST_CASE("data store wrapped_read write_till_exact_full", "[data-store]")
     nvs_flash_deinit();
 }
 
-TEST_CASE("data store write read release_zero read release_zero release_all", "[data-store]")
+TEST_CASE("data store write read release_zero read release_zero release_all", "[data-store][data-store-rtc]")
 {
     size_t len = 0;
     uint32_t count = 15;
@@ -385,13 +387,13 @@ static void read_stale_critical_data_in_b1_b2(void)
     nvs_flash_deinit();
 }
 
-TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_1 after reset", "[data-store-flash]",
+TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_1 after reset", "[data-store][data-store-flash]",
                           write_critical_data_in_b1_and_reset, read_critical_data_in_b1);
 
-TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_2 after reset", "[data-store-flash]",
+TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_2 after reset", "[data-store][data-store-flash]",
                           write_critical_data_in_b2_and_reset, read_critical_data_in_b2);
 
-TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_1_2 after reset", "[data-store-flash]",
+TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_1_2 after reset", "[data-store][data-store-flash]",
                           write_critical_data_in_b1_b2_and_reset, read_stale_critical_data_in_b1_b2);
 
 #else /* CONFIG_DIAG_DATA_STORE_RTC */
@@ -406,6 +408,7 @@ static void read_critical_data_in_rtc(void)
     read_critical_data(1);
 }
 
-TEST_CASE_MULTIPLE_STAGES("data store validate data in RTC after crash", "[data-store-rtc]",
+TEST_CASE_MULTIPLE_STAGES("data store validate data in RTC after crash", "[data-store][data-store-rtc]",
                           write_critical_data_in_rtc_and_reset, read_critical_data_in_rtc);
 #endif /* CONFIG_DIAG_DATA_STORE_FLASH */
+#endif /* CONFIG_APP_TEST_DATA_STORE */
