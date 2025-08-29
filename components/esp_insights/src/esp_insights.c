@@ -31,6 +31,10 @@
 #include "esp_insights_encoder.h"
 #include "esp_insights_cbor_decoder.h"
 
+#ifdef CONFIG_ESP_INSIGHTS_THREAD_ENABLED
+#include "esp_openthread.h"
+#endif
+
 #ifdef CONFIG_ESP_INSIGHTS_CMD_RESP_ENABLED
 #define INSIGHTS_CMD_RESP 1
 #endif
@@ -133,12 +137,15 @@ static void esp_insights_first_call(void *priv_data)
     xTimerStart(entry->timer, 0);
 }
 
-/* Returns true if wifi is connected and insights is enabled, false otherwise */
-static bool is_insights_active(void)
+/* Returns true if ethernet is connected, false otherwise */
+static bool is_ethernet_connected(void)
 {
-    wifi_ap_record_t ap_info;
-    bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
-    return wifi_connected && s_insights_data.enabled;
+    esp_netif_t *eth = esp_netif_get_handle_from_ifkey("ETH_DEF");
+    if (eth == NULL) {
+        return false;
+    }
+
+    return esp_netif_is_netif_up(eth);
 }
 
 /* Returns true if wifi is connected, false otherwise */
@@ -147,6 +154,46 @@ static bool is_wifi_connected(void)
     wifi_ap_record_t ap_info;
     bool wifi_connected = esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK;
     return wifi_connected;
+}
+
+/**
+ * Returns true if connected to a thread network with a border router, false if not.
+ * In case its unable to identify a BR, returns true.
+ */
+static bool is_thread_with_br_connected(void)
+{
+#ifdef CONFIG_ESP_INSIGHTS_THREAD_ENABLED
+    esp_netif_t *ot = esp_netif_get_handle_from_ifkey("OT_DEF");
+    if (ot == NULL) return false;
+
+    if(!esp_netif_is_netif_up(ot)) return false;
+
+    otInstance *instance = esp_openthread_get_instance();
+    if (!instance) return false;
+
+    otNetworkDataIterator it = OT_NETWORK_DATA_ITERATOR_INIT;
+    otBorderRouterConfig cfg;
+
+    while (otNetDataGetNextOnMeshPrefix(instance, &it, &cfg) == OT_ERROR_NONE) {
+        if (cfg.mDefaultRoute) {
+            return true;
+        }
+    }
+
+    return false;
+#else
+    return false;
+#endif
+}
+
+/* Returns true if connected to the internet and insights is enabled, false otherwise */
+static bool is_insights_active(void)
+{
+    bool wifi_connected = is_wifi_connected();
+    bool ethernet_connected = is_ethernet_connected();
+    bool is_thread_with_br = is_thread_with_br_connected();
+
+    return (wifi_connected || ethernet_connected || is_thread_with_br) && s_insights_data.enabled;
 }
 
 /* This executes in the context of timer task.
