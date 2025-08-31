@@ -22,12 +22,8 @@
 #include "esp_idf_version.h"
 #endif
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-#include <esp_random.h> // esp_system.h does not provice esp_random() API from IDF v5.0
+#include <esp_random.h> // esp_system.h does not provide esp_random() API from IDF v5.0
 #include <esp_app_desc.h> // for `esp_app_get_elf_sha256` API
-#else
-#include <esp_ota_ops.h>
-#endif
 
 #define TAG "RTC_STORE"
 #define INSIGHTS_NVS_NAMESPACE "storage"
@@ -505,16 +501,6 @@ static inline uint8_t to_int_digit(unsigned val)
     return (val <= '9') ? (val - '0') : (val - 'a' + 10);
 }
 
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 0, 0)
-static void hex_to_bytes(uint8_t *src, uint8_t *dst, int out_len)
-{
-    for (int i = 0; i < out_len; i++) {
-        uint8_t val0 = to_int_digit(src[2 * i]);
-        uint8_t val1 = to_int_digit(src[2 * i + 1]);
-        dst[i] = (val0 << 4) | (val1);
-    }
-}
-#endif
 
 static esp_err_t rtc_store_meta_hdr_init()
 {
@@ -558,13 +544,8 @@ skip_nvs_read_write:
     s_priv_data.meta_hdr = &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
 
     // populate meta header
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
     const uint8_t* src = esp_app_get_description()->app_elf_sha256;
     memcpy((uint8_t *)s_priv_data.meta_hdr->sha_sum, src, RTC_STORE_SHA_SIZE);
-#else
-    esp_ota_get_app_elf_sha256(s_priv_data.sha_sum, sizeof(s_priv_data.sha_sum));
-    hex_to_bytes((uint8_t *) s_priv_data.sha_sum, (uint8_t *) s_priv_data.meta_hdr->sha_sum, RTC_STORE_SHA_SIZE);
-#endif
 
     s_priv_data.meta_hdr->gen_id = gen_id;
     s_priv_data.meta_hdr->boot_cnt = boot_cnt;

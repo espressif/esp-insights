@@ -7,22 +7,8 @@ set(srcs "src/esp_insights.c"
         "src/esp_insights_cbor_decoder.c"
         "src/esp_insights_cbor_encoder.c")
 
-set(priv_req cbor rmaker_common esptool_py espcoredump esp_diag_data_store nvs_flash)
-
-# esp_timer component was introduced in v4.2
-if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER "4.1")
-    list(APPEND priv_req esp_timer)
-endif()
-
-# esp_hw_support component was introduced in v4.3
-if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER "4.2")
-    list(APPEND priv_req esp_hw_support)
-endif()
-
-# from IDF version 5.0, we need to explicitly specify requirements
-if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
-    list(APPEND priv_req esp_wifi)
-endif()
+set(priv_req cbor rmaker_common esptool_py espcoredump esp_diag_data_store nvs_flash
+             esp_timer esp_hw_support esp_wifi)
 
 set(pub_req esp_diagnostics)
 

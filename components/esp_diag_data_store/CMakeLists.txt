@@ -1,7 +1,5 @@
-# from IDF version 5.0, we need to explicitly specify requirements
-if("${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}" VERSION_GREATER_EQUAL "5.0")
+# These components are available in ESP-IDF >= 5.1
 set(req esp_event esp_hw_support)
-endif()
 
 set(srcs "src/esp_diag_data_store.c")
 

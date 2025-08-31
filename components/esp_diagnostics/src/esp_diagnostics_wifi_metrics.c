@@ -57,23 +57,19 @@ static void update_min_rssi(int32_t rssi)
         esp_diag_metrics_add_int(KEY_MIN_RSSI, rssi);
 #endif
         ESP_LOGI(LOG_TAG, "Wi-Fi RSSI crossed threshold %" PRIi32, rssi);
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
         esp_wifi_set_rssi_threshold(rssi);
-#endif
     }
 }
 
 static void wifi_evt_handler(void *arg, esp_event_base_t evt_base, int32_t evt_id, void *evt_data)
 {
     switch (evt_id) {
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
         case WIFI_EVENT_STA_BSS_RSSI_LOW:
         {
             wifi_event_bss_rssi_low_t *data = evt_data;
             update_min_rssi(data->rssi);
         }
         break;
-#endif /* ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)  */
         case WIFI_EVENT_STA_CONNECTED:
         {
             s_priv_data.wifi_connected = true;
@@ -180,12 +176,10 @@ esp_err_t esp_diag_wifi_metrics_init(void)
     if (err != ESP_OK) {
         return err;
     }
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 3, 0)
     err = esp_wifi_set_rssi_threshold(WIFI_RSSI_THRESHOLD);
     if (err != ESP_OK) {
         ESP_LOGW(LOG_TAG, "Failed to set rssi threshold value");
     }
-#endif
     esp_diag_metrics_register(METRICS_TAG, KEY_RSSI, "Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
     esp_diag_metrics_register(METRICS_TAG, KEY_MIN_RSSI, "Minimum ever Wi-Fi RSSI", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_INT);
     esp_diag_metrics_register(METRICS_TAG, KEY_STATUS, "Wi-Fi connect status", PATH_WIFI_STATION, ESP_DIAG_DATA_TYPE_BOOL);

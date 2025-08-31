@@ -13,17 +13,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-/* Onwards esp-idf v5.0 esp_cpu_process_stack_pc() is moved to
- * components/xtensa/include/esp_cpu_utils.h
- */
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-    #if CONFIG_IDF_TARGET_ARCH_XTENSA
-        #include "esp_cpu_utils.h"
-    #else /* CONFIG_IDF_TARGET_ARCH_RISCV */
-        #define esp_cpu_process_stack_pc(x) (x)   // dummy definition to avoid compilation error
-    #endif
-#else // For esp-idf version <= v4.4
-    #include "soc/cpu.h"
+/* Available in ESP-IDF >= 5.1 */
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+    #include "esp_cpu_utils.h"
+#else /* CONFIG_IDF_TARGET_ARCH_RISCV */
+    #define esp_cpu_process_stack_pc(x) (x)   // dummy definition to avoid compilation error
 #endif
 
 #define IS_LOG_TYPE_ENABLED(type) (s_priv_data.init && (type & s_priv_data.enabled_log_type))
@@ -324,11 +318,7 @@ static esp_err_t diag_log_add(esp_diag_log_type_t type, uint32_t pc, const char 
     log.msg_args_len = strlen((char *)log.msg_args);
 #endif
     va_end(ap);
-#if ESP_IDF_VERSION_MAJOR == 4 && ESP_IDF_VERSION_MINOR < 3
-    task_name = pcTaskGetTaskName(NULL);
-#else
     task_name = pcTaskGetName(NULL);
-#endif
     if (task_name) {
         strlcpy(log.task_name, task_name, sizeof(log.task_name));
     }

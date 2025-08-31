@@ -1,3 +1,16 @@
+## 26-Aug-2025 (Stable Release)
+
+- With this release we drop the beta tag in README
+- Bug Fixes:
+  - WDT trigger on crash_dump cbor encoding
+  - Incorrect data_send timer reset causing data send stop
+  - Command Response: Critical crash fixed
+  - Fixed log wrap linking errors on latest ESP-IDFs
+  - Fixed latest changes in docs not built
+- Features/Support:
+  - Dropped IDF 4.x support from main branch (For IDF 4.x support you may refer to idf_4_x_compat branch)
+  - Configurable polling interval for Wi-Fi and heap metrics
+
 ## 24-Jul-2024 (Command Response Framework and Components update)
 - Added support for command response framework
   - To demonstrate this, a simple reboot command has been added. Admins can trigger this command from the Insights dashboard (under Node's Settings tab) to reboot the device.
