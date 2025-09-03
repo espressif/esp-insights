@@ -12,6 +12,9 @@ menu "Diagnostics data store"
         config DIAG_DATA_STORE_RTC
             bool "RTC memory"
 
+        config DIAG_DATA_STORE_RAM
+            bool "Internal RAM"
+
         config DIAG_DATA_STORE_FLASH
             bool "Flash"
             help
@@ -52,6 +55,25 @@ menu "Diagnostics data store"
             default 2048 if IDF_TARGET_ESP32
             default 4096
             range 512 RTC_STORE_DATA_SIZE
+            help
+                This option configures the size of critical data buffer and remaining is used for
+                non critical data buffer.
+    endmenu
+
+    menu "RAM Store"
+        depends on DIAG_DATA_STORE_RAM
+
+        config RAM_STORE_DATA_SIZE
+            int "RTC store data size"
+            default 6144
+            help
+                The data store is divided into two parts to store critical and non-critical data.
+                This option configures the total size of data store.
+
+        config RAM_STORE_CRITICAL_DATA_SIZE
+            int "Maximum size of critical data store"
+            default 4096
+            range 512 RAM_STORE_DATA_SIZE
             help
                 This option configures the size of critical data buffer and remaining is used for
                 non critical data buffer.

@@ -20,7 +20,16 @@
 #define NVS_KEY_B1_CHARS "b1_chars"
 #define NVS_KEY_B2_CHARS "b2_chars"
 #define INSIGHTS_NVS_NAMESPACE  "nvs"
+
+#ifdef CONFIG_DIAG_DATA_STORE_RTC
 #define READ_DATA_SIZE  CONFIG_RTC_STORE_DATA_SIZE
+#define CRITICAL_DATA_SIZE  CONFIG_RTC_STORE_CRITICAL_DATA_SIZE
+
+#elifdef CONFIG_DIAG_DATA_STORE_RAM
+#define READ_DATA_SIZE  CONFIG_RAM_STORE_DATA_SIZE
+#define CRITICAL_DATA_SIZE  CONFIG_RAM_STORE_CRITICAL_DATA_SIZE
+#endif
+
 static uint8_t data[READ_DATA_SIZE];
 
 typedef struct {
@@ -146,20 +155,20 @@ TEST_CASE("data store wrapped_read write_till_exact_full", "[data-store][data-st
     assert(rtc_store_init() == ESP_OK);
 
     // fill the buffer completely
-    memset(data, 0, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE);
-    rtc_store_critical_data_write(data, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE - 1);
+    memset(data, 0, CRITICAL_DATA_SIZE);
+    rtc_store_critical_data_write(data, CRITICAL_DATA_SIZE - 1);
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
     // actual data written was 1 byte more than length provided
-    TEST_ASSERT((len == CONFIG_RTC_STORE_CRITICAL_DATA_SIZE));
+    TEST_ASSERT((len == CRITICAL_DATA_SIZE));
     /* Release all data */
     TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
     // fill half the buffer, (this also makes sure if we are cool with prev edge case)
-    memset(data, 0, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE);
-    rtc_store_critical_data_write(data, CONFIG_RTC_STORE_CRITICAL_DATA_SIZE - 4);
+    memset(data, 0, CRITICAL_DATA_SIZE);
+    rtc_store_critical_data_write(data, CRITICAL_DATA_SIZE - 4);
     len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
     // actual data written was 1 byte more than length provided
-    TEST_ASSERT((len == CONFIG_RTC_STORE_CRITICAL_DATA_SIZE - 4 + 1));
+    TEST_ASSERT((len == CRITICAL_DATA_SIZE - 4 + 1));
     /* Release all data */
     TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
@@ -396,7 +405,9 @@ TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_2 after reset", "[da
 TEST_CASE_MULTIPLE_STAGES("data store validate data in bank_1_2 after reset", "[data-store][data-store-flash]",
                           write_critical_data_in_b1_b2_and_reset, read_stale_critical_data_in_b1_b2);
 
-#else /* CONFIG_DIAG_DATA_STORE_RTC */
+#else /* CONFIG_DIAG_DATA_STORE_FLASH */
+
+#ifndef CONFIG_DIAG_DATA_STORE_RAM
 
 static void write_critical_data_in_rtc_and_reset(void)
 {
@@ -410,5 +421,10 @@ static void read_critical_data_in_rtc(void)
 
 TEST_CASE_MULTIPLE_STAGES("data store validate data in RTC after crash", "[data-store][data-store-rtc]",
                           write_critical_data_in_rtc_and_reset, read_critical_data_in_rtc);
+
+#endif /* CONFIG_DIAG_DATA_STORE_RAM */
+
 #endif /* CONFIG_DIAG_DATA_STORE_FLASH */
+
+
 #endif /* CONFIG_APP_TEST_DATA_STORE */
