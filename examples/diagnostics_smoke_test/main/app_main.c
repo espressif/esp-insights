@@ -54,16 +54,16 @@ static void smoke_test(void *arg)
             ESP_LOGE(TAG, "[count][%d]", count);
         } else if (dice > 150 && dice < 300) {
             ESP_LOGW(TAG, "[count][%d]", count);
-        } else if (dice > 300 && dice < 470) {
+        } else if (dice > 300 && dice < 450) {
             ESP_DIAG_EVENT(TAG, "[count][%d]", count);
         } else {
-            /* 30 in 500 probability to crash */
+            /* 50 in 500 probability to crash */
             if (s_reset_count > MAX_CRASHES) {
                 ESP_DIAG_EVENT(TAG, "[count][%d]", count);
             } else {
                ESP_LOGE(TAG, "[count][%d] [crash_count][%" PRIu32 "] [excvaddr][0x0f] Crashing...", count, s_reset_count);
                *(int *)0x0F = 0x10;
-           }
+            }
         }
 
         esp_diag_heap_metrics_dump();

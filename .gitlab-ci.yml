@@ -11,7 +11,6 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   ESP_DOCS_ENV_IMAGE: "$CI_DOCKER_REGISTRY/esp-idf-doc-env-v5.4:1-1"
   ESP_DOCS_PATH: "$CI_PROJECT_DIR"
-  LOCAL_REFERENCE_PATH: "/Users/espressif/local_reference/esp-idf"
 
 before_script:
   # add gitlab ssh key
@@ -24,55 +23,84 @@ before_script:
   # Create insights-bins-${CI_JOB_ID}/ dir (to copy binaries into for artifacts)
   - mkdir -p $CI_PROJECT_DIR/esp-insights-bins-${CI_JOB_ID}
 
-.setup_idf: &setup_idf
-  - echo Checking git version
-  - git --version
-  - echo Cloning esp-idf - Started
-  - git clone --depth 1 --shallow-submodules --recursive --single-branch -b ${IDF_GIT_BRANCH} --reference-if-able $LOCAL_REFERENCE_PATH https://github.com/espressif/esp-idf.git
-  - cd esp-idf
-  - echo Cloning esp-idf - Done
-  - echo Running install.sh - Started
-  - ./install.sh --enable-pytest
-  - echo Running install.sh - Done
-  - echo Running export.sh - Started
-  - source export.sh
-  - echo Running export.sh - Done
-  - export PYTHONPATH=$IDF_PATH/tools/ci/python_packages:$PYTHONPATH
-  - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
-  - pip install -r python_test_requirement.txt
-
-# function validates the xml report and convert it into html reports
-.validate_and_generate_html_reports: &validate_and_generate_html_reports
-  - echo $XML_REPORT_PATH
-  - echo $HTML_REPORT_DIR
-
-  # Get all XML files in the specified folder
-  - xml_reports=$(find "$XML_REPORT_PATH" -type f -name "*.xml")
-
-  # Check for failures in XML files
-  - failures=$(grep -e '<failure>' -e '<error>' $xml_reports || true)
-  - if [ -n "$failures" ]; then
-      echo "Tests failed. See console log for details.";
-      exit 1;
+.setup_hardware: &setup_hardware
+  - curl -o resource-pool-cli.py pn-tools.espressif.cn:5011/download-cli
+  - python3 -m pip install paramiko scp esptool
+  - |    
+    echo "Command: python3 resource-pool-cli.py grab --user-id ${CI_JOB_ID} --resource-type ${TARGET} --wait-time 60 --timeout 3600"
+    if RESOURCE_OUTPUT=$(python3 resource-pool-cli.py grab --user-id ${CI_JOB_ID} --resource-type ${TARGET} --wait-time 60 --timeout 3600); then
+      echo "RESOURCE_OUTPUT: $RESOURCE_OUTPUT"
+      DEVICE_IP=$(echo "$RESOURCE_OUTPUT" | grep -E "^\s*ip:" | grep -oP 'ip: \K[^\s]+')
+      RFC_PORT=$(echo "$RESOURCE_OUTPUT" | grep -E "^\s*rfc_port:" | grep -oP 'rfc_port: \K[^\s]+')
+      export RESOURCE_ID=$(echo "$RESOURCE_OUTPUT" | grep -E "^\s*resource_id:" | grep -oP 'resource_id: \K[^\s]+')
+      export DEVICE_PORT="rfc2217://${DEVICE_IP}:${RFC_PORT}"
+      export RESOURCE_CONFIG_FILE=$(echo "$RESOURCE_OUTPUT" | grep -oP 'Resource data saved to: \K[^\s]+')
+      echo "Device: $DEVICE_PORT | Config: $RESOURCE_CONFIG_FILE | Resource ID: $RESOURCE_ID"
+      echo "$RESOURCE_ID" > ${CI_PROJECT_DIR}/.resource_id
+      echo "${CI_JOB_ID}" > ${CI_PROJECT_DIR}/.job_id
+     
     else
-      echo "All tests passed.";
+      echo "ERROR: Failed to grab ${TARGET} resource for job ${CI_JOB_ID}"
+      echo "Resource allocation failed"      
+      exit 1
     fi
 
-  # Loop through each XML file and generate HTML report
+.release_hardware: &release_hardware
   - |
-    for xml_file in $xml_reports; do
-      # Generate HTML output path based on the specified directory
-      html_output="${HTML_REPORT_DIR}/$(basename "$xml_file" .xml).html"
-      junit2html "$xml_file" "$html_output"
-    done
-
-  # Check if any HTML report generation failed
-  - if [ $? -eq 0 ]; then
-      echo "HTML reports generated successfully.";
+    if [ -f ${CI_PROJECT_DIR}/.resource_id ] && [ -f ${CI_PROJECT_DIR}/.job_id ]; then
+      RESOURCE_ID=$(cat ${CI_PROJECT_DIR}/.resource_id)
+      JOB_ID=$(cat ${CI_PROJECT_DIR}/.job_id)
+      echo "Releasing resource: $RESOURCE_ID for job: $JOB_ID"
+      python3 ${CI_PROJECT_DIR}/resource-pool-cli.py release --resource-id ${RESOURCE_ID} --user-id ${JOB_ID} || true
+      rm -f ${CI_PROJECT_DIR}/.resource_id ${CI_PROJECT_DIR}/.job_id
     else
-      echo "Failed to generate HTML reports.";
-      exit 1;
+      echo "No resource to release (resource ID file not found)"
     fi
+    
+.flash_firmware: &flash_firmware
+  - python3 ${CI_PROJECT_DIR}/resource-pool-cli.py erase-flash ${RESOURCE_CONFIG_FILE}
+  - |
+    if [ "$TARGET" == "esp32" ]; then
+      BOOTLOADER_ADDR="0x1000"
+    else
+      BOOTLOADER_ADDR="0x0"
+    fi
+    python3 ${CI_PROJECT_DIR}/resource-pool-cli.py flash build/bootloader/bootloader.bin ${BOOTLOADER_ADDR} ${RESOURCE_CONFIG_FILE}
+  - python3 ${CI_PROJECT_DIR}/resource-pool-cli.py flash build/partition_table/partition-table.bin 0x8000 ${RESOURCE_CONFIG_FILE}
+  - python3 ${CI_PROJECT_DIR}/resource-pool-cli.py flash build/${APP_BIN} 0x10000 ${RESOURCE_CONFIG_FILE}
+
+.flash_rm_claimed_data: &flash_rm_claimed_data
+  - echo "Flashing RainMaker claimed data to device at 0x340000..."
+  - python3 ${CI_PROJECT_DIR}/resource-pool-cli.py flash "${CLAIM_DATA_PATH}/${MAC_ADDR}.bin" 0x340000 ${RESOURCE_CONFIG_FILE}
+
+.start_device_monitor: &start_device_monitor
+  - mkdir -p ${STRESS_TEST_REPORT_DIR}
+  - export LOG_FILE="${STRESS_TEST_REPORT_DIR}/device_logs_${TARGET}.txt"
+  - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
+  - nohup script -q -c "idf.py monitor -p ${DEVICE_PORT}" "${LOG_FILE}" </dev/null >/dev/null 2>&1 &
+  - sleep 2
+  - echo "Log monitoring started"
+
+.stop_device_monitor: &stop_device_monitor
+  - pkill -9 -f "idf.py monitor" || true
+
+.generate_rainmaker_claim_data: &generate_rainmaker_claim_data
+  - python3 -m pip install esp-rainmaker-cli
+  - esp-rainmaker-cli login --email "${UT_USERNAME}" --password "${UT_PASSWORD}"
+  - esp-rainmaker-cli claim --mac "${MAC_ADDR}" --outdir "${CI_PROJECT_DIR}/.rainmaker_claim" || true
+  - export CLAIM_DATA_PATH=$(find "${CI_PROJECT_DIR}/.rainmaker_claim" -type d -name "${MAC_ADDR}" | head -n 1)
+  - export NODE_ID=$(cat "${CLAIM_DATA_PATH}/node.info")
+  - echo "$NODE_ID"
+
+.build_stress_test: &build_stress_test
+  - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
+  - rm -rf build sdkconfig
+  - echo "CONFIG_EXAMPLE_WIFI_SSID=\"${UT_WIFI_SSID}\"" >> sdkconfig.defaults
+  - echo "CONFIG_EXAMPLE_WIFI_PASSWORD=\"${UT_WIFI_PASSWORD}\"" >> sdkconfig.defaults
+  - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
+  - echo $UT_InsightsAuthKeyToken > main/insights_auth_key.txt
+  - idf.py set-target $TARGET
+  - idf.py build
 
 .build_minimal_diagnostics: &build_minimal_diagnostics
   # Building minimal_diagnostics app - Started
@@ -169,146 +197,130 @@ build_idf_v5.5:
   variables:
     EXAMPLE_TARGETS: "esp32 esp32s2 esp32c3 esp32s3 esp32c6 esp32c2"
 
-schedule_refresh_local_reference:
-  stage: sync
-  before_script: []
-  dependencies: [] # no need to download artifacts from previous jobs
-  timeout: 20m
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+.unit_test_template:
+  image: espressif/idf:release-v5.4
+  variables:
+    TARGET: ${TARGET}
+    APP_BIN: "esp_insights_test.bin"
+  stage: test
+  dependencies: []
+  needs: []
+  timeout: 30m
   tags:
     - idf_unit_test_runner
+  before_script:
+    # acquire esp device
+    - *setup_hardware
   script:
-  - echo "Changing directory to $LOCAL_REFERENCE_PATH"
-  - cd $LOCAL_REFERENCE_PATH
-  - echo "Current branch:"
-  - git branch
-  - echo "Pulling latest changes..."
-  - git pull
-  - echo "Updating submodules..."
-  - git submodule update --init --recursive
+    # build unit test application
+    - echo $IDF_PATH
+    - cd $CI_PROJECT_DIR
+    - cd unit_test_app
+    - idf.py set-target $TARGET
+    - idf.py build
+
+    # flash above built application
+    - *flash_firmware
+
+    # start the rfc2217 server
+    - python3 ${CI_PROJECT_DIR}/resource-pool-cli.py rfc2217-server ${RESOURCE_CONFIG_FILE}
+
+    # run the unit tests
+    - python3 run_test.py $DEVICE_PORT --sequence tests_sequence.json --log-file result.txt
+
+    # check the result.txt for any FAIL entries
+    - if grep -q FAIL result.txt; then
+    - echo "❌ Found FAIL entries in result.txt"
+    - exit 1
+    - else
+    - echo "✅ No FAIL entries found"
+    - fi
+  after_script:
+      - *release_hardware
+  artifacts:
+    when: always
+    paths:
+      - unit_test_app/result.txt
+
+unit_test_esp32C3:
+  extends: .unit_test_template
+  variables:
+    TARGET: "esp32c3"
+
+unit_test_esp32:
+  extends: .unit_test_template
+  variables:
+    TARGET: "esp32"
 
 .stress_test_template:
-  before_script: []
+  image: espressif/idf:release-v5.4
   variables:
+    TARGET: ${TARGET}
+    APP_BIN: "diagnostics_smoke_test.bin"
     UT_PASSWORD: $PROD_PASSWORD
     UT_USERNAME: $PROD_USERNAME
     UT_BASE_URI: $PROD_BASE_URI
     UT_DIAG_URI: $PROD_DIAG_URI
     UT_InsightsAuthKeyToken: $PROD_InsightsAuthKeyToken
+    UT_WIFI_SSID: $UT_WIFI_SSID
+    UT_WIFI_PASSWORD: $UT_WIFI_PASSWORD
     PYTHON_TESTS_PATH: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests"
-    STRESS_TEST_REPORT_DIR: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/stress_test_report_$TARGET"
+    STRESS_TEST_REPORT_DIR: "$CI_PROJECT_DIR/Test_Report_ST/${TARGET}"
   stage: test
-  timeout: 30m
+  dependencies: []
+  needs: []
+  timeout: 2h
   tags:
     - idf_unit_test_runner
-  script:
-    - *setup_idf
-    # Cleanup previous test artifacts
-    - cd $CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests
-    - rm -f *.xml
+  before_script:
+    # Generate claim certificate and extract node ID
+    - *generate_rainmaker_claim_data
 
-    # Build and flash diagnostics smoke test
+    # acquire esp device
+    - *setup_hardware
+  script:
+    # build diagnostics_smoke_test application
+    - *build_stress_test
+
+    # Flash the firmware
     - cd $CI_PROJECT_DIR/examples/diagnostics_smoke_test
-    - rm -rf build sdkconfig
-    - echo 'CONFIG_EXAMPLE_WIFI_SSID="ES_Staff"' >> sdkconfig.defaults
-    - echo 'CONFIG_EXAMPLE_WIFI_PASSWORD="ES@puba45"' >> sdkconfig.defaults
-    - echo CONFIG_ESP_INSIGHTS_TRANSPORT_MQTT=y >> sdkconfig.defaults
-    - echo $UT_InsightsAuthKeyToken > main/insights_auth_key.txt
-    - idf.py set-target $TARGET
-    - echo idf.py build flash -p $USB_PORT
-    - idf.py build flash -p $USB_PORT
+    - *flash_firmware
+    
+    # Flash the claim data
+    - *flash_rm_claimed_data
+
+    # start the rfc2217 server
+    - python3 ${CI_PROJECT_DIR}/resource-pool-cli.py rfc2217-server ${RESOURCE_CONFIG_FILE}
+
+    # Start monitoring device logs in background
+    - *start_device_monitor
 
     # Run stress tests
     - cd $PYTHON_TESTS_PATH
-    - echo "python3 stress_tests.py --password=${UT_PASSWORD} --username=${UT_USERNAME} --base_uri=${UT_BASE_URI} --diag_uri=${UT_DIAG_URI} --node_id=${UT_NODE_ID}"
-    - python3 stress_tests.py --password=${UT_PASSWORD} --username=${UT_USERNAME} --base_uri=${UT_BASE_URI} --diag_uri=${UT_DIAG_URI} --node_id=${UT_NODE_ID}
+    - python3 -m pip install -r python_test_requirement.txt
+    - python3 stress_tests.py --username=${UT_USERNAME} --password=${UT_PASSWORD} --base_uri=${UT_BASE_URI} --diag_uri=${UT_DIAG_URI} --node_id=${NODE_ID} --output=${STRESS_TEST_REPORT_DIR}
 
-    # Check XML reports generated by stress tests
-    - mkdir -p $STRESS_TEST_REPORT_DIR
-    - export XML_REPORT_PATH=$PYTHON_TESTS_PATH
-    - export HTML_REPORT_DIR=$STRESS_TEST_REPORT_DIR
-    - *validate_and_generate_html_reports
-  artifacts:
-    name: "stress_test_report_$TARGET"
-    paths:
-      - "$STRESS_TEST_REPORT_DIR"
-
-.unit_test_template:
-  before_script: []
-  variables:
-    UT_TEST_REPORT_DIR: "$CI_PROJECT_DIR/TEST_REPORT"
-    PYTHON_TESTS_PATH: "$CI_PROJECT_DIR/components/esp_diag_data_store/test/python_tests"
-  stage: test
-  timeout: 30m
-  tags:
-    - idf_unit_test_runner
-  script:
-    - *setup_idf
-
-    # Update configuration parameters, set USB port in env_config.yml
-    - yq eval ".default.unit-test-app = \"$USB_PORT\"" -i "env_config.yml"
-    - cat env_config.yml
-
-    - cd $CI_PROJECT_DIR
-    - mkdir -p TEST_LOGS
-
-    - cd unit_test_app
-    - idf.py set-target $TARGET
-    - idf.py build
-    - pytest --target $TARGET --junit-xml ../TEST_LOGS/unit_test_report_${TARGET}.xml
-
-    # Check XML reports generated by unit tests
-    - mkdir -p $UT_TEST_REPORT_DIR
-    - export XML_REPORT_PATH="${CI_PROJECT_DIR}/TEST_LOGS"
-    - export HTML_REPORT_DIR=$UT_TEST_REPORT_DIR
-    - *validate_and_generate_html_reports
+  after_script:
+    - *release_hardware
+    - *stop_device_monitor
+    - esp-rainmaker-cli logout || true
 
   artifacts:
-    name: "unit_test_report_$TARGET"
-    paths:
-      - "$UT_TEST_REPORT_DIR"
-
-unit_test_esp32:
-  extends: .unit_test_template
-  dependencies: []
-  variables:
-    TARGET: "esp32"
-    USB_PORT: $ESP32_USB_PORT
+    when: always
+    paths:      
+      - ${STRESS_TEST_REPORT_DIR}/
 
 stress_test_esp32:
   extends: .stress_test_template
-  needs:
-    - job: unit_test_esp32
-      artifacts: false
   variables:
     TARGET: "esp32"
-    USB_PORT: $ESP32_USB_PORT
-    UT_NODE_ID: $ESP32_NODE_ID
-
-#TODO: Investigate the method for passing the TARGET variable to the unit_test.py script.
-#TODO Once resolved, uncomment the "unit_test_esp32c3" job, replace needs field of job stress_test_esp32c3 with
-#TODO: job: unit_test_esp32c3 artifacts: false
-
-#unit_test_esp32c3:
-#  extends: .unit_test_template
-#  needs:
-#    - job: stress_test_esp32
-#      artifacts: false
-#  variables:
-#    TARGET: "esp32c3"
-#    USB_PORT: $ESP32C3_USB_PORT
+    MAC_ADDR: "ABCABCABCABC"
 
 stress_test_esp32c3:
   extends: .stress_test_template
-  needs:
-    - job: stress_test_esp32
-      artifacts: false
-  dependencies: []
   variables:
     TARGET: "esp32c3"
-    USB_PORT: $ESP32C3_USB_PORT
-    UT_NODE_ID: $ESP32C3_NODE_ID
+    MAC_ADDR: "ABCDABCDABCD"
 
 build_docs:
   stage: build

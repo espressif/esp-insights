@@ -1,0 +1,22 @@
+[
+    {
+        "command": "*",
+        "wait_for": "\"read_critical_data_in_rtc\"",
+        "description": "Run tests 1-5, then test 6 shows sub-menu with options (1) and (2)"
+    },
+    {
+        "command": "1",
+        "wait_for": "Press ENTER to see the list of tests",
+        "description": "Run stage 1: write_critical_data_in_rtc_and_reset"
+    },
+    {
+        "command": "",
+        "wait_for": "\"read_critical_data_in_rtc\"",
+        "description": "Press Enter to return to test 6 sub-menu"
+    },
+    {
+        "command": "2",
+        "wait_for": "OK",
+        "description": "Run stage 2: read_critical_data_in_rtc and wait for completion"
+    }
+]
