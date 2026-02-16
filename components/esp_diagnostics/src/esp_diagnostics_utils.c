@@ -40,12 +40,18 @@
 #include <esp_cpu_utils.h>
 #endif
 
-/* 
- * Note: task_snapshot.h is deprecated but still needed for detailed task backtrace information.
- * The modern vTaskList() API doesn't provide backtrace details required for diagnostics.
- * This may need to be replaced with alternative approaches in future ESP-IDF versions.
- */
+/* TaskSnapshot_t / uxTaskGetSnapshotAll: header moved across ESP-IDF versions.
+ * 5.1: freertos/task_snapshot.h (public)
+ * 5.2: esp_private/freertos_debug.h (task_snapshot.h deprecated)
+ * 6.0: freertos/freertos_debug.h (made public again) */
+#include "esp_idf_version.h"
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+#include "freertos/freertos_debug.h"
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+#include "esp_private/freertos_debug.h"
+#else
 #include "freertos/task_snapshot.h"
+#endif
 
 #define DISABLE_INTERRUPTS portSET_INTERRUPT_MASK_FROM_ISR
 #define ENABLE_INTERRUPTS  portCLEAR_INTERRUPT_MASK_FROM_ISR
