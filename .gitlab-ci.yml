@@ -1,4 +1,10 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
 stages:
+  - check
   - build
   - sync
   - test
@@ -402,3 +408,6 @@ push_main_to_github:
     - git remote remove github &>/dev/null || true
     - git remote add github git@github.com:espressif/esp-insights.git
     - git push github "${CI_COMMIT_SHA}:refs/heads/${CI_COMMIT_REF_NAME}"
+
+include:
+  - '.gitlab/ci/pre_commit.yml'
