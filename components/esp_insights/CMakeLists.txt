@@ -10,6 +10,10 @@ set(srcs "src/esp_insights.c"
 set(priv_req cbor rmaker_common esptool_py espcoredump esp_diag_data_store nvs_flash
              esp_timer esp_hw_support esp_wifi)
 
+if(CONFIG_ESP_INSIGHTS_THREAD_ENABLED)
+    list(APPEND priv_req openthread)
+endif()
+
 set(pub_req esp_diagnostics)
 
 idf_component_register(SRCS ${srcs}
