@@ -11,7 +11,9 @@
 #include <string.h>
 #include <esp_log.h>
 #include <esp_wifi.h>
+#if CONFIG_ESP_COREDUMP_ENABLE
 #include <esp_core_dump.h>
+#endif
 
 #include <nvs.h>
 #include <esp_crc.h>
@@ -160,8 +162,8 @@ static bool is_wifi_connected(void)
  * data will be reported. Depending on whether data was sent or not during
  * the previous timeout, we double or halve the time period.
  * This ensures that data generally gets reported quick enough,
- * but if there's very frequent data being generated, it wont result
- * into too frquent publishes.
+ * but if there's very frequent data being generated, it won't result
+ * into too frequent publishes.
  * The period will keep changing between CLOUD_REPORTING_PERIOD_MIN_SEC and
  * CLOUD_REPORTING_PERIOD_MAX_SEC
  */
@@ -488,7 +490,7 @@ static void send_insights_conf_meta(void)
 /* Consider 100 bytes are published and received on cloud but RMAKER_MQTT_EVENT_PUBLISHED
  * event is not received for 100 bytes. In a mean time 50 bytes are added to the buffer.
  * When the next time timer expires then old 100 bytes plus new 50 bytes will be published
- * and if RMAKER_MQTT_EVENT_PUBLISHED event is recieve for the new message then 150 bytes
+ * and if RMAKER_MQTT_EVENT_PUBLISHED event is receive for the new message then 150 bytes
  * will be removed from the buffers.
  *
  * In short, there is the possibility of data duplication, so cloud should be able to handle it.
@@ -1080,7 +1082,7 @@ esp_err_t esp_insights_init(esp_insights_config_t *config)
     s_insights_data.init_done = true;
 
     err = esp_insights_cmd_resp_init() || esp_insights_cmd_resp_enable();
-    if (err != ESP_OK) { /* device can keep working neverthless */
+    if (err != ESP_OK) { /* device can keep working nevertheless */
         ESP_LOGE(TAG, "Failed to enable insights_cmd_resp");
     }
     return ESP_OK;
