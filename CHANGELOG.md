@@ -1,3 +1,14 @@
+## 16-Apr-2026 (ESP-IDF v6.0 Support)
+
+- Add ESP-IDF v6.0 compatibility:
+  - esp_insights: Guard `esp_core_dump.h` include for when coredump is disabled
+  - esp_insights: Fix `project_include.cmake` for IDF v6.0 CMake target ordering
+  - esp_diagnostics: Add compat defines for WIFI_BW_HT20/HT40 rename (WIFI_BW20/BW40)
+  - Fix pre-existing codespell typos
+- CI: Add IDF v6.0 build job
+- CI: Remove forced `idf-component-manager` upgrade that broke older IDF builds
+- Bump component versions: esp_insights 1.3.3, esp_diagnostics 1.3.3
+
 ## 26-Aug-2025 (Stable Release)
 
 - With this release we drop the beta tag in README
@@ -39,4 +50,4 @@
    ```bash
    Component config > ESP Insights > Use older metadata format (1.0)
    ```
--  Using metdata 2.0 is disabled by default in the SDK, but enabled in all examples. **It is strongly recommended to move to 2.0, since the subsequent features (like runtime enabling of metrics, variable, etc.)**
+-  Using metadata 2.0 is disabled by default in the SDK, but enabled in all examples. **It is strongly recommended to move to 2.0, since the subsequent features (like runtime enabling of metrics, variable, etc.)**
