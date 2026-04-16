@@ -8,6 +8,7 @@
 */
 #include "string.h"
 #include "esp_log.h"
+#include "soc/soc_caps.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
@@ -25,13 +26,20 @@
 #define MAX_CRASHES 5
 #define MAX_PTRS    30
 
+/* RTC_NOINIT_ATTR is not available on chips without RTC memory (e.g. ESP32-C2) */
+#if SOC_RTC_MEM_SUPPORTED
+#define NOINIT_ATTR RTC_NOINIT_ATTR
+#else
+#define NOINIT_ATTR
+#endif
+
 #ifdef CONFIG_ESP_INSIGHTS_TRANSPORT_HTTPS
 extern const char insights_auth_key_start[] asm("_binary_insights_auth_key_txt_start");
 extern const char insights_auth_key_end[] asm("_binary_insights_auth_key_txt_end");
 #endif
 
 static const char *TAG = "diag_smoke";
-RTC_NOINIT_ATTR static uint32_t s_reset_count;
+NOINIT_ATTR static uint32_t s_reset_count;
 static void *s_ptrs[MAX_PTRS];
 
 static void smoke_test(void *arg)
