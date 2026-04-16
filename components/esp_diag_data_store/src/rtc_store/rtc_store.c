@@ -6,15 +6,10 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <soc/soc_memory_layout.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include <esp_system.h>
 #include <esp_log.h>
 #include <nvs_flash.h>
-
-#include <esp_diag_data_store.h>
-#include "rtc_store.h"
 #include <esp_crc.h>
 #include <inttypes.h>
 
@@ -22,8 +17,28 @@
 #include "esp_idf_version.h"
 #endif
 
-#include <esp_random.h> // esp_system.h does not provide esp_random() API from IDF v5.0
-#include <esp_app_desc.h> // for `esp_app_get_elf_sha256` API
+#if !CONFIG_IDF_TARGET_LINUX
+#include <soc/soc_memory_layout.h>
+#include <esp_system.h>
+#include <esp_random.h>
+#include <esp_app_desc.h>
+#else
+/* Linux host stubs. Values here match the IDF esp_reset_reason_t enum but
+ * are effectively unused — the host-side esp_reset_reason() always returns
+ * ESP_RST_POWERON. `rand()` is seeded only by the test harness (if at all)
+ * and is not thread-safe; acceptable because these stubs are exercised
+ * only from unit tests. */
+#include <stdlib.h>
+static inline uint32_t esp_random(void) { return (uint32_t)rand(); }
+typedef int esp_reset_reason_t;
+#define ESP_RST_UNKNOWN     0
+#define ESP_RST_POWERON     1
+#define ESP_RST_BROWNOUT    9
+static inline esp_reset_reason_t esp_reset_reason(void) { return ESP_RST_POWERON; }
+#endif
+
+#include <esp_diag_data_store.h>
+#include "rtc_store.h"
 
 #define TAG "RTC_STORE"
 #define INSIGHTS_NVS_NAMESPACE "storage"
@@ -251,7 +266,7 @@ esp_err_t rtc_store_critical_data_write(void *data, size_t len)
 
     size_t len_real = len + 1; // 1 byte to store meta_index
     if (len_real > DIAG_CRITICAL_BUF_SIZE) {
-        printf("rtc_store_critical_data_write: len too large %d, size %d\n",
+        printf("rtc_store_critical_data_write: len too large %zu, size %d\n",
                 len_real, DIAG_CRITICAL_BUF_SIZE);
         return ESP_FAIL;
     }
@@ -287,9 +302,11 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     if (!dg || !len || !data) {
         return ESP_ERR_INVALID_ARG;
     }
+#if !CONFIG_IDF_TARGET_LINUX
     if (!esp_ptr_in_drom(dg)) {
         return ESP_ERR_INVALID_ARG;
     }
+#endif
     if (!s_priv_data.init) {
         printf("rtc_store init not done! skipping non_critical_data_write...\n");
         return ESP_ERR_INVALID_STATE;
@@ -299,7 +316,7 @@ esp_err_t rtc_store_non_critical_data_write(const char *dg, void *data, size_t l
     size_t curr_free;
 
     if (req_free > DIAG_NON_CRITICAL_BUF_SIZE) {
-        printf("rtc_store_non_critical_data_write: len too large %d, size %d\n",
+        printf("rtc_store_non_critical_data_write: len too large %zu, size %d\n",
                 req_free, DIAG_NON_CRITICAL_BUF_SIZE);
         return ESP_FAIL;
     }
@@ -556,9 +573,13 @@ skip_nvs_read_write:
     s_rtc_store.meta_hdr_idx = (s_rtc_store.meta_hdr_idx + 1) % RTC_STORE_MAX_META_RECORDS;
     s_priv_data.meta_hdr = &s_rtc_store.meta[s_rtc_store.meta_hdr_idx];
 
-    // populate meta header
+    /* Populate meta header with ELF SHA */
+#if CONFIG_IDF_TARGET_LINUX
+    memset((uint8_t *)s_priv_data.meta_hdr->sha_sum, 0, RTC_STORE_SHA_SIZE);
+#else
     const uint8_t* src = esp_app_get_description()->app_elf_sha256;
     memcpy((uint8_t *)s_priv_data.meta_hdr->sha_sum, src, RTC_STORE_SHA_SIZE);
+#endif
 
     s_priv_data.meta_hdr->gen_id = gen_id;
     s_priv_data.meta_hdr->boot_cnt = boot_cnt;
@@ -626,11 +647,12 @@ esp_err_t rtc_store_init(void)
     }
 
     esp_reset_reason_t reset_reason = esp_reset_reason();
-
     if (reset_reason == ESP_RST_UNKNOWN ||
             reset_reason == ESP_RST_POWERON ||
             reset_reason == ESP_RST_BROWNOUT) {
-        // TODO: also check if hash is changed
+        /* TODO: also reset meta when the firmware hash changes across an
+         * OTA so stale meta_hdr entries don't outlive the app that
+         * produced them. */
         s_rtc_store.meta_hdr_idx = -1;
     }
     rtc_store_meta_hdr_init();

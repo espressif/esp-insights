@@ -266,6 +266,38 @@ unit_test_esp32:
   variables:
     TARGET: "esp32"
 
+unit_test_linux:
+  # Only exercises CONFIG_DIAG_DATA_STORE_RAM — the RTC-store code path is
+  # implicit-HW and cannot run on the host.
+  stage: test
+  image: espressif/idf:release-v5.5
+  tags:
+    - build
+  dependencies: []
+  needs: []
+  script:
+    - cd unit_test_app
+    - cat sdkconfig.ci.linux >> sdkconfig.defaults
+    - idf.py --preview set-target linux
+    - idf.py build
+    - |
+      # Unity's menu loops forever waiting for the next test, so `timeout`
+      # will always kill the ELF (exit 124) after running `*`. Capture the
+      # status, always print output, and trust the grep'd summary lines —
+      # asserting at least one test ran avoids "0 Failures" passing when
+      # the filter matched nothing.
+      set +e
+      echo -e "\n*\n" | timeout 30 ./build/esp_insights_test.elf > test_output.txt 2>&1
+      RET=$?
+      set -e
+      cat test_output.txt
+      if [ $RET -ne 0 ] && [ $RET -ne 124 ]; then
+        echo "Test ELF exited unexpectedly with $RET"
+        exit $RET
+      fi
+      grep -qE "[1-9][0-9]* Tests " test_output.txt
+      grep -q "0 Failures" test_output.txt
+
 .stress_test_template:
   image: espressif/idf:release-v5.4
   variables:
