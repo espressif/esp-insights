@@ -26,7 +26,7 @@ header_file_path_prefix = "components/"
 """string: path prefix for header files.
 """
 doxyfile_path = "Doxyfile"
-"""string: path to a file containing header files to processs.
+"""string: path to a file containing header files to process.
 """
 xml_directory_path = "xml"
 """string: path to directory with XML files by Doxygen.

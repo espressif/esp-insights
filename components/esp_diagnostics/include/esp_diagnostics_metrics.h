@@ -119,7 +119,7 @@ esp_err_t esp_diag_metrics_unregister(const char *tag, const char *key);
  * @param[in] key   Key for which the unit to be specified
  * @param[in] unit  Unit string of the data
  *
- * @return ESP_OK if successful, appropriate error code othewise.
+ * @return ESP_OK if successful, appropriate error code otherwise.
  *
  * @note this API if used, should be called after \ref esp_diag_metrics_register
  *      API with the same `key` to take effect
@@ -236,7 +236,7 @@ esp_err_t esp_diag_metrics_unregister(const char *key);
  * @param[in] key   Key for which the unit to be specified
  * @param[in] unit  Unit string of the data
  *
- * @return ESP_OK if successful, appropriate error code othewise.
+ * @return ESP_OK if successful, appropriate error code otherwise.
  *
  * @note this API if used, should be called after \ref esp_diag_metrics_register
  *      API with the same `key` to take effect

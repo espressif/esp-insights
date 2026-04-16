@@ -86,5 +86,5 @@ menu "ESP Insights"
         default y
         help
             For users already using older metadata, this provides an option to keep using the same.
-            This is important as the new metadata version (1.1), is not backwad compatible.
+            This is important as the new metadata version (1.1), is not backwards compatible.
 endmenu

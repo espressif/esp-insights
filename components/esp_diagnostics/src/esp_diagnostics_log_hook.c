@@ -153,7 +153,7 @@ static void get_tlv_from_ap(esp_diag_log_data_t *log, const char *format, va_lis
             case 'i':
                 switch (mf) {
                     case MOD_NONE: /* none, no modifier found */
-                    case MOD_z: /* singed integer of size size_t */
+                    case MOD_z: /* signed integer of size size_t */
                         arg_val.i = va_arg(ap, int);
                         err = append_arg(log->msg_args, &out_size, arg_max_len, ARG_TYPE_INT, sizeof(int), &arg_val.i);
                         break;
@@ -205,7 +205,7 @@ static void get_tlv_from_ap(esp_diag_log_data_t *log, const char *format, va_lis
                         arg_val.u = va_arg(ap, unsigned int);
                         err = append_arg(log->msg_args, &out_size, arg_max_len, ARG_TYPE_UINT, len, &arg_val.u);
                         break;
-                    case MOD_hh:    /* unsinged char */
+                    case MOD_hh:    /* unsigned char */
                         arg_val.uc = va_arg(ap, unsigned int);
                         err = append_arg(log->msg_args, &out_size, arg_max_len, ARG_TYPE_UCHAR, len, &arg_val.uc);
                         break;

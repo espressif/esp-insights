@@ -6,11 +6,12 @@ menu "Diagnostics data store"
         help
             This option configures the place to store diagnostics data: RTC memory or Flash.
 
-            Flash store needs an additional patition table entry.
+            Flash store needs an additional partition table entry.
             NOTE: Diagnostics data partition must be encrypted if Flash Encryption is enabled.
 
         config DIAG_DATA_STORE_RTC
             bool "RTC memory"
+            depends on SOC_RTC_MEM_SUPPORTED
 
         config DIAG_DATA_STORE_RAM
             bool "Internal RAM"

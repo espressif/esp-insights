@@ -82,7 +82,7 @@ menu "Diagnostics"
         bool "Enable Wi-Fi Metrics"
         default y
         help
-            Enables Wi-Fi metrics and collects Wi-Fi RSSI and minumum ever Wi-Fi RSSI.
+            Enables Wi-Fi metrics and collects Wi-Fi RSSI and minimum ever Wi-Fi RSSI.
 
     config DIAG_WIFI_POLLING_INTERVAL
         depends on DIAG_ENABLE_WIFI_METRICS
