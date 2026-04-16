@@ -71,7 +71,7 @@ size_t esp_insights_encode_meta(uint8_t *out_data, size_t out_data_size, char *s
     esp_insights_cbor_encode_meta_data_end();
     uint16_t len = esp_insights_cbor_encode_meta_end(out_data + TLV_OFFSET);
 
-    out_data[0] = INSIGHTS_META_DATA_TYPE;      /* Data type inidcation diagnostics meta - 1 byte */
+    out_data[0] = INSIGHTS_META_DATA_TYPE;      /* Data type indication diagnostics meta - 1 byte */
     memcpy(&out_data[1], &len, sizeof(len));    /* Data length - 2 bytes */
     len += TLV_OFFSET;
     return len;
@@ -104,7 +104,7 @@ size_t esp_insights_encode_conf_meta(uint8_t *out_data, size_t out_data_size, ch
 
     uint16_t len = esp_insights_cbor_encode_meta_end(out_data + TLV_OFFSET);
 
-    out_data[0] = INSIGHTS_META_DATA_TYPE;      /* Data type inidcation diagnostics meta - 1 byte */
+    out_data[0] = INSIGHTS_META_DATA_TYPE;      /* Data type indication diagnostics meta - 1 byte */
     memcpy(&out_data[1], &len, sizeof(len));    /* Data length - 2 bytes */
     len += TLV_OFFSET;
     return len;

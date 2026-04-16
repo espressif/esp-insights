@@ -14,7 +14,7 @@
 #define TAG "DIAG_VARIABLES"
 #define DIAG_VARIABLES_MAX_COUNT   CONFIG_DIAG_VARIABLES_MAX_COUNT
 
-/* Max supported string lenth */
+/* Max supported string length */
 #define MAX_STR_LEN         (sizeof(((esp_diag_str_data_pt_t *)0)->value.str) - 1)
 #define MAX_VARIABLES_WRITE_SZ     sizeof(esp_diag_data_pt_t)
 #define MAX_STR_VARIABLES_WRITE_SZ sizeof(esp_diag_str_data_pt_t)
@@ -72,7 +72,7 @@ esp_err_t esp_diag_variable_register(const char *tag, const char *key,
                                      esp_diag_data_type_t type)
 {
     if (!tag || !key || !label || !path) {
-        ESP_LOGE(TAG, "Failed to register variable, tag, key, lable, or path is NULL");
+        ESP_LOGE(TAG, "Failed to register variable, tag, key, label, or path is NULL");
         return ESP_ERR_INVALID_ARG;
     }
     if (!s_priv_data.init) {

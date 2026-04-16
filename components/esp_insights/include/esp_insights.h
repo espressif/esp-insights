@@ -44,7 +44,7 @@ typedef struct {
  * event has event data of type \ref esp_insights_transport_event_data_t;
  */
 typedef enum {
-    /** Asynchronous data send succeded. Event data contains the msg_id of the data. */
+    /** Asynchronous data send succeeded. Event data contains the msg_id of the data. */
     INSIGHTS_EVENT_TRANSPORT_SEND_SUCCESS,
     /** Asynchronous data send failed. Event data contains the msg_id of the data. */
     INSIGHTS_EVENT_TRANSPORT_SEND_FAILED,
@@ -218,7 +218,7 @@ bool esp_insights_is_reporting_enabled(void);
 esp_err_t esp_insights_reporting_enable();
 
 /**
- * @brief Turn off the Insights repoting
+ * @brief Turn off the Insights reporting
  *
  * @return esp_err_t ESP_OK on success, apt error otherwise
  * @note meta message if changed and the boot message will still be

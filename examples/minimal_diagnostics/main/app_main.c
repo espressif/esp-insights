@@ -83,7 +83,7 @@ void app_main(void)
      * config options are enabled in order to use esp_diag_heap_metrics_dump() and esp_diag_wifi_metrics_dump() APIs.
      *
      * Enabling the config options CONFIG_DIAG_ENABLE_HEAP_METRICS and CONFIG_DIAG_ENABLE_WIFI_METRICS are enough
-     * to start reporting heap and wifi metrics respectively. Following is done to demostrate the use of
+     * to start reporting heap and wifi metrics respectively. Following is done to demonstrate the use of
      * esp_diag_heap_metrics_dump() and esp_diag_wifi_metrics_dump() APIs and view good graphs on the dashboard.
      */
     while (true) {

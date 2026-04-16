@@ -548,7 +548,7 @@ static void esp_insights_cmd_callback(const char *topic, void *payload, size_t p
             char publish_topic[100];
             snprintf(publish_topic, sizeof(publish_topic), "node/%s/%s", esp_insights_get_node_id(), FROM_NODE_TOPIC_SUFFIX);
             if (esp_insights_mqtt_publish(publish_topic, output, output_len, RMAKER_MQTT_QOS1, NULL) != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to publish reponse.");
+                ESP_LOGE(TAG, "Failed to publish response.");
             }
             free(output);
         } else {
