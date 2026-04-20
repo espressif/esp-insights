@@ -76,11 +76,14 @@ static void validate_critical_data(const void *data, size_t len,
 
 static void init_nvs_flash(void)
 {
+#if CONFIG_IDF_TARGET_LINUX
+    /* Linux NVS state persists across test runs via the file-backed
+     * emulator; wipe it so each test starts clean. On ESP targets the
+     * NVS partition is re-initialised every test binary flash, so we
+     * only pay for the erase on the host. */
+    nvs_flash_erase();
+#endif
     esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      err = nvs_flash_init();
-    }
     TEST_ASSERT(err == ESP_OK);
 }
 
@@ -220,6 +223,84 @@ TEST_CASE("data store write read release_zero read release_zero release_all", "[
     TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
 
     /* data store deinit */
+    rtc_store_deinit();
+    nvs_flash_deinit();
+}
+
+TEST_CASE("data store double init", "[data-store][data-store-rtc]")
+{
+    init_nvs_flash();
+    TEST_ASSERT(rtc_store_init() == ESP_OK);
+    /* Second init should return invalid state */
+    TEST_ASSERT(rtc_store_init() == ESP_ERR_INVALID_STATE);
+    rtc_store_deinit();
+    nvs_flash_deinit();
+}
+
+TEST_CASE("data store non-critical write read", "[data-store][data-store-rtc]")
+{
+    /* Use a string literal for data group — must be in rodata for esp_ptr_in_drom check */
+    static const char dg[] = "test_nc";
+
+    init_nvs_flash();
+    TEST_ASSERT(rtc_store_init() == ESP_OK);
+
+    uint32_t test_val = 0xDEADBEEF;
+    esp_err_t err = rtc_store_non_critical_data_write(dg, &test_val, sizeof(test_val));
+    TEST_ASSERT(err == ESP_OK);
+
+    int len = rtc_store_non_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT(len > 0);
+
+    TEST_ASSERT(rtc_store_non_critical_data_release(len) == ESP_OK);
+
+    len = rtc_store_non_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT(len == 0);
+
+    rtc_store_deinit();
+    nvs_flash_deinit();
+}
+
+TEST_CASE("data store discard", "[data-store][data-store-rtc]")
+{
+    init_nvs_flash();
+    TEST_ASSERT(rtc_store_init() == ESP_OK);
+
+    uint32_t test_val = 0x12345678;
+    TEST_ASSERT(rtc_store_critical_data_write(&test_val, sizeof(test_val)) == ESP_OK);
+
+    /* Verify data was written */
+    int len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT(len > 0);
+    TEST_ASSERT(rtc_store_critical_data_release(len) == ESP_OK);
+
+    /* Discard all data */
+    TEST_ASSERT(rtc_store_discard_data() == ESP_OK);
+
+    /* Read should return 0 after discard */
+    len = rtc_store_critical_data_read(data, READ_DATA_SIZE);
+    TEST_ASSERT(len == 0);
+
+    rtc_store_deinit();
+    nvs_flash_deinit();
+}
+
+TEST_CASE("data store read and release combined", "[data-store][data-store-rtc]")
+{
+    init_nvs_flash();
+    TEST_ASSERT(rtc_store_init() == ESP_OK);
+
+    /* init_nvs_flash() + rtc_store_init() already reset persistent and
+     * in-RAM state, so no explicit discard is needed here. */
+
+    uint32_t test_val = 0xABCD1234;
+    TEST_ASSERT(rtc_store_critical_data_write(&test_val, sizeof(test_val)) == ESP_OK);
+
+    /* read_and_release reads data and releases buffer-size bytes.
+     * Verify that data is returned successfully. */
+    int len = rtc_store_critical_data_read_and_release(data, READ_DATA_SIZE);
+    TEST_ASSERT(len > 0);
+
     rtc_store_deinit();
     nvs_flash_deinit();
 }

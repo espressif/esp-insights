@@ -1,3 +1,10 @@
+## 17-Apr-2026 (Linux Unit Test Infrastructure)
+
+- esp_diag_data_store: Add Linux host target support for RAM data store (RTC store remains ESP-only)
+- Add unit tests for esp_diag_data_store covering read/write/release flows
+- CI: Add Linux unit test job
+- Bump component version: esp_diag_data_store 1.1.1
+
 ## 16-Apr-2026 (ESP-IDF v6.0 Support)
 
 - Add ESP-IDF v6.0 compatibility:
