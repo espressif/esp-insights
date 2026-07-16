@@ -1,3 +1,8 @@
+## 29-Jun-2026 (ESP32-C2 ESP-IDF v6.0 Fix)
+
+- esp_insights: Require `esp_diag_data_store ~1.1.1` (was pinned to `1.1.0`). 1.1.1 guards the RTC store on `SOC_RTC_MEM_SUPPORTED`, so chips without RTC retention RAM (e.g. ESP32-C2) fall back to the RAM store instead of failing to build under ESP-IDF v6.0 (where `RTC_NOINIT_ATTR` is a hard error on such chips).
+- Bump component version: esp_insights 1.3.4
+
 ## 17-Apr-2026 (Linux Unit Test Infrastructure)
 
 - esp_diag_data_store: Add Linux host target support for RAM data store (RTC store remains ESP-only)
