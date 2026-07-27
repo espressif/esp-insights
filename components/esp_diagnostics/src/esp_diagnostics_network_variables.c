@@ -269,7 +269,7 @@ esp_err_t esp_diag_network_variables_init(void)
     /* If wifi is not connected then wifi details are recorded in event handler */
     if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
         /* If wifi is connected then record the wifi details */
-        memcpy(s_priv_data.prev_sta_data.ssid, ap_info.ssid, sizeof(s_priv_data.prev_sta_data.ssid));
+        strlcpy((char*) s_priv_data.prev_sta_data.ssid, (char*) ap_info.ssid, sizeof(s_priv_data.prev_sta_data.ssid));
         memcpy(s_priv_data.prev_sta_data.bssid, ap_info.bssid, sizeof(s_priv_data.prev_sta_data.bssid));
         s_priv_data.prev_sta_data.channel = ap_info.primary;
         s_priv_data.prev_sta_data.authmode = ap_info.authmode;

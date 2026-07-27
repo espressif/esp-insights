@@ -263,7 +263,11 @@ esp_err_t esp_diag_variable_report(esp_diag_data_type_t data_type, const char *t
 #endif
     strlcpy(data.key, key, sizeof(data.key));
     data.ts = ts;
-    memcpy(&data.value, val, val_sz);
+    if (variable->type == ESP_DIAG_DATA_TYPE_STR) {
+        strlcpy(data.value.str, val, sizeof(data.value.str));
+    } else {
+        memcpy(&data.value, val, val_sz);
+    }
 
     if (s_priv_data.config.write_cb) {
         return s_priv_data.config.write_cb(variable->tag, &data, write_sz, s_priv_data.config.cb_arg);
